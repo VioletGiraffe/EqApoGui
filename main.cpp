@@ -6,11 +6,11 @@
 #include <QButtonGroup>
 #include <QPushButton>
 #include <QFile>
-#include <QTextStream>
 #include <QMessageBox>
 #include <QGroupBox>
 #include <QStringList>
-#include <QDebug>
+#include <QThread>
+
 #include <stdexcept>
 
 class ApoSwitcher : public QMainWindow {
@@ -23,17 +23,19 @@ public:
 		preampCheck = new QCheckBox("Preamp", this);
 		mainLayout->addWidget(preampCheck);
 		// Profiles section
-		profilesGroup = new QGroupBox("EQ Profiles", this);
-		QVBoxLayout *profilesLayout = new QVBoxLayout(profilesGroup);
-		profileGroup = new QButtonGroup(this);
-		profileGroup->setExclusive(false); // Allow none selected
-		mainLayout->addWidget(profilesGroup);
+		profilesGroupBox = new QGroupBox("EQ Profiles", this);
+		profilesGroupBox->setLayout(new QVBoxLayout);
+
+		profileButtonGroup = new QButtonGroup(this);
+		profileButtonGroup->setExclusive(false); // Allow none selected
+		mainLayout->addWidget(profilesGroupBox);
 		mainLayout->addStretch();
 		setCentralWidget(centralWidget);
+
 		configPath = "C:/Program Files/EqualizerAPO/config/config.txt"; // Adjust if needed
 		loadConfig();
 
-		connect(profileGroup, &QButtonGroup::buttonToggled, this, &ApoSwitcher::applyChanges);
+		connect(profileButtonGroup, &QButtonGroup::buttonToggled, this, &ApoSwitcher::applyChanges);
 		connect(preampCheck, &QCheckBox::toggled, this, &ApoSwitcher::applyChanges);
 	}
 private:
@@ -59,8 +61,18 @@ private:
 			}
 			// Write back to file
 			QFile configFile(configPath);
-			if (!configFile.open(QIODevice::WriteOnly))
-				throw std::runtime_error(("Failed to open config for writing: " + configFile.errorString()).toStdString());
+			const auto tryOpenFile = [&]() -> bool {
+				for (size_t attempt = 0; attempt < 5; ++attempt) {
+					if (configFile.open(QIODevice::WriteOnly))
+						return true;
+
+					QThread::msleep(20);
+				}
+				return false;
+			};
+
+			if (!tryOpenFile())
+				throw std::runtime_error("Failed to open config for writing: " + configFile.errorString().toStdString());
 
 			for (const QString& line : std::as_const(newConfig))
 			{
@@ -71,7 +83,7 @@ private:
 
 			configFile.close();
 			if (configFile.error() != QFileDevice::NoError)
-				throw std::runtime_error(("Error closing config after writing: " + configFile.errorString()).toStdString());
+				throw std::runtime_error("Error closing config after writing: " + configFile.errorString().toStdString());
 
 		} catch (const std::exception& e) {
 			QMessageBox::warning(this, "Error", QString::fromStdString(e.what()));
@@ -81,7 +93,7 @@ private:
 		try {
 			QFile configFile(configPath);
 			if (!configFile.open(QIODevice::ReadOnly | QIODevice::Text))
-				throw std::runtime_error(("Failed to open config for reading: " + configFile.errorString()).toStdString());
+				throw std::runtime_error("Failed to open config for reading: " + configFile.errorString().toStdString());
 
 			QTextStream in(&configFile);
 			QString line;
@@ -101,9 +113,9 @@ private:
 					includeLines << cleanLine;
 					QRadioButton *profileRadio = new QRadioButton(cleanLine, this);
 					profileRadio->setChecked(!isCommented);
-					profileGroup->addButton(profileRadio);
+					profileButtonGroup->addButton(profileRadio);
 					profileButtons << profileRadio;
-					profilesGroup->layout()->addWidget(profileRadio);
+					profilesGroupBox->layout()->addWidget(profileRadio);
 					connect(profileRadio, &QRadioButton::toggled, [this, profileRadio](bool checked) {
 						if (checked)
 							for (auto* button : profileButtons) {
@@ -116,11 +128,11 @@ private:
 				// Ignore other lines for simplicity
 			}
 			if (in.status() != QTextStream::Ok && in.status() != QTextStream::ReadPastEnd)
-				throw std::runtime_error(("Error while reading config: " + configFile.errorString()).toStdString());
+				throw std::runtime_error("Error while reading config: " + configFile.errorString().toStdString());
 
 			configFile.close();
 			if (configFile.error() != QFileDevice::NoError)
-				throw std::runtime_error(("Error closing config after reading: " + configFile.errorString()).toStdString());
+				throw std::runtime_error("Error closing config after reading: " + configFile.errorString().toStdString());
 
 			// If multiple profiles were active, warn or handle (but per spec, enforce one)
 			int activeCount = 0;
@@ -141,10 +153,10 @@ private:
 	QString configPath;
 	QCheckBox *preampCheck;
 	QString preampLine;
-	QButtonGroup *profileGroup;
+	QButtonGroup *profileButtonGroup;
 	QVector<QRadioButton*> profileButtons;
 	QStringList includeLines;
-	QGroupBox *profilesGroup;
+	QGroupBox *profilesGroupBox;
 };
 
 
