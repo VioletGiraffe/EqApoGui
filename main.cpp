@@ -13,7 +13,7 @@
 
 #include <stdexcept>
 
-class ApoSwitcher : public QMainWindow {
+class ApoSwitcher final : public QMainWindow {
 public:
 	ApoSwitcher(QWidget *parent = nullptr) : QMainWindow(parent) {
 		setWindowTitle("Equalizer APO Profile Switcher");
@@ -38,6 +38,7 @@ public:
 		connect(profileButtonGroup, &QButtonGroup::buttonToggled, this, &ApoSwitcher::applyChanges);
 		connect(preampCheck, &QCheckBox::toggled, this, &ApoSwitcher::applyChanges);
 	}
+
 private:
 	void applyChanges() {
 		try {
@@ -89,6 +90,7 @@ private:
 			QMessageBox::warning(this, "Error", QString::fromStdString(e.what()));
 		}
 	}
+
 	void loadConfig() {
 		try {
 			QFile configFile(configPath);
