@@ -1,22 +1,24 @@
 #include <QApplication>
-#include <QMainWindow>
-#include <QVBoxLayout>
-#include <QCheckBox>
-#include <QRadioButton>
 #include <QButtonGroup>
-#include <QPushButton>
+#include <QCheckBox>
+#include <QDoubleSpinBox>
 #include <QFile>
-#include <QMessageBox>
 #include <QGroupBox>
+#include <QHBoxLayout>
+#include <QMainWindow>
+#include <QMessageBox>
+#include <QPushButton>
+#include <QRadioButton>
 #include <QStringList>
 #include <QThread>
+#include <QVBoxLayout>
+
 #include <stdexcept>
-#include <QDoubleSpinBox>
-#include <QHBoxLayout>
 
 class ApoSwitcher final : public QMainWindow {
 public:
-	ApoSwitcher(QWidget* parent = nullptr) : QMainWindow(parent) {
+	ApoSwitcher(QWidget* parent = nullptr) : QMainWindow(parent)
+	{
 		setWindowTitle("Equalizer APO Profile Switcher");
 		QWidget* centralWidget = new QWidget(this);
 		QVBoxLayout* mainLayout = new QVBoxLayout(centralWidget);
@@ -48,7 +50,8 @@ public:
 	}
 
 private:
-	void applyChanges() {
+	void applyChanges()
+	{
 		try {
 			// Collect active items
 			QStringList newConfig;
@@ -99,7 +102,8 @@ private:
 		}
 	}
 
-	void loadConfig() {
+	void loadConfig()
+	{
 		try {
 			QFile configFile(configPath);
 			if (!configFile.open(QIODevice::ReadOnly | QIODevice::Text))
@@ -181,6 +185,8 @@ private:
 			QMessageBox::warning(this, "Error", QString::fromStdString(e.what()));
 		}
 	}
+
+
 	QString configPath;
 	QCheckBox* preampCheck;
 	double preampGain = 0.0;
@@ -190,7 +196,10 @@ private:
 	QStringList includeLines;
 	QGroupBox* profilesGroupBox;
 };
-int main(int argc, char* argv[]) {
+
+
+int main(int argc, char* argv[])
+{
 	QApplication app(argc, argv);
 	ApoSwitcher window;
 	window.show();
