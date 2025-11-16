@@ -12,6 +12,9 @@
 #include <QStringList>
 #include <QThread>
 #include <QVBoxLayout>
+#include <QMenu>
+#include <QAction>
+#include <QProcess>
 
 #include <stdexcept>
 
@@ -41,8 +44,9 @@ public:
 		mainLayout->addWidget(profilesGroupBox);
 		mainLayout->addStretch();
 		setCentralWidget(centralWidget);
-		configPath = "C:/Program Files/EqualizerAPO/config/config.txt"; // Adjust if needed
+
 		loadConfig();
+
 		connect(profileButtonGroup, &QButtonGroup::buttonToggled, this, &ApoSwitcher::applyChanges);
 		connect(preampCheck, &QCheckBox::toggled, this, &ApoSwitcher::applyChanges);
 		connect(preampCheck, &QCheckBox::toggled, preampSpin, &QDoubleSpinBox::setEnabled);
@@ -71,7 +75,7 @@ private:
 			}
 
 			// Write back to file
-			QFile configFile(configPath);
+			QFile configFile(configFolder + "/config.txt");
 			const auto tryOpenFile = [&]() -> bool {
 				for (size_t attempt = 0; attempt < 5; ++attempt) {
 					if (configFile.open(QIODevice::WriteOnly))
@@ -80,7 +84,7 @@ private:
 					QThread::msleep(20);
 				}
 				return false;
-			};
+				};
 
 			if (!tryOpenFile())
 				throw std::runtime_error("Failed to open config for writing: " + configFile.errorString().toStdString());
@@ -105,7 +109,7 @@ private:
 	void loadConfig()
 	{
 		try {
-			QFile configFile(configPath);
+			QFile configFile(configFolder + "/config.txt");
 			if (!configFile.open(QIODevice::ReadOnly | QIODevice::Text))
 				throw std::runtime_error("Failed to open config for reading: " + configFile.errorString().toStdString());
 
@@ -143,6 +147,18 @@ private:
 					profileButtonGroup->addButton(profileRadio);
 					profileButtons << profileRadio;
 					profilesGroupBox->layout()->addWidget(profileRadio);
+
+					const QString filePath = configFolder + '/' +  cleanLine.mid(cleanLine.indexOf(':') + 1).trimmed();
+					profileRadio->setContextMenuPolicy(Qt::CustomContextMenu);
+					connect(profileRadio, &QWidget::customContextMenuRequested, this, [this, profileRadio, filePath](const QPoint& pos) {
+						QMenu contextMenu(this);
+						QAction* openAction = contextMenu.addAction("Open in Notepad");
+						connect(openAction, &QAction::triggered, [filePath]() {
+							QProcess::startDetached("notepad.exe", { filePath });
+						});
+						contextMenu.exec(profileRadio->mapToGlobal(pos));
+					});
+
 					connect(profileRadio, &QRadioButton::toggled, [this, profileRadio](bool checked) {
 						if (!checked)
 							return;
@@ -187,7 +203,7 @@ private:
 	}
 
 
-	QString configPath;
+	QString configFolder = "C:/Program Files/EqualizerAPO/config"; // Adjust if needed;
 	QCheckBox* preampCheck;
 	double preampGain = 0.0;
 	QDoubleSpinBox* preampSpin;
