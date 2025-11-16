@@ -1,0 +1,22 @@
+# User-specific files
+*.suo
+*.user
+*.sln.docstates
+*.VC.db
+.vs/
+.qtc_clangd/
+
+# Build results
+[Dd]ebug/
+[Rr]elease/
+
+*.vc*proj*
+*.sln
+Makefile
+Makefile.Debug
+Makefile.Release
+.qmake.stash
+*.dmg
+.DS_Store
+
+*.8-pre1
