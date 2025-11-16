@@ -20,7 +20,7 @@
 #include <stdexcept>
 #include <vector>
 
-inline bool tryOpenFile(QFile& file, QIODevice::OpenMode mode)
+static bool tryOpenFile(QFile& file, QIODevice::OpenMode mode)
 {
 	for (int attempt = 0; attempt < 5; ++attempt)
 	{
@@ -55,12 +55,21 @@ public:
 		profileButtonGroup = new QButtonGroup(this);
 		profileButtonGroup->setExclusive(false); // Allow none selected
 		mainLayout->addWidget(profilesGroupBox);
-		// New config button
+
 		auto* buttonsLayout = new QHBoxLayout;
 		buttonsLayout->setSpacing(1);
 		QPushButton* newConfigButton = new QPushButton("Create new EQ", this);
 		buttonsLayout->addWidget(newConfigButton);
 		connect(newConfigButton, &QPushButton::clicked, this, &ApoSwitcher::createNewConfig);
+
+		QPushButton* editConfigTxt = new QPushButton("Edit config.txt", this);
+		connect(editConfigTxt, &QPushButton::clicked, this, &ApoSwitcher::editConfigTxt);
+		buttonsLayout->addWidget(editConfigTxt);
+
+		QPushButton* reloadFromDisk = new QPushButton("Reload from disk", this);
+		connect(reloadFromDisk, &QPushButton::clicked, this, &ApoSwitcher::loadConfig);
+		buttonsLayout->addWidget(reloadFromDisk);
+
 		mainLayout->addLayout(buttonsLayout);
 		mainLayout->addStretch();
 		setCentralWidget(centralWidget);
@@ -281,6 +290,10 @@ private:
 		}
 	}
 
+	void editConfigTxt()
+	{
+		QProcess::startDetached("notepad.exe", { configFolder + "/config.txt" });
+	}
 
 	QString configFolder = "C:/Program Files/EqualizerAPO/config"; // Adjust if needed;
 	QCheckBox* preampCheck;
