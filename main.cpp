@@ -17,6 +17,7 @@
 #include <QProcess>
 
 #include <stdexcept>
+#include <vector>
 
 class ApoSwitcher final : public QMainWindow {
 public:
@@ -145,7 +146,7 @@ private:
 					QRadioButton* profileRadio = new QRadioButton(cleanLine, this);
 					profileRadio->setChecked(!isCommented);
 					profileButtonGroup->addButton(profileRadio);
-					profileButtons << profileRadio;
+					profileButtons.push_back(profileRadio);
 					profilesGroupBox->layout()->addWidget(profileRadio);
 
 					const QString filePath = configFolder + '/' +  cleanLine.mid(cleanLine.indexOf(':') + 1).trimmed();
@@ -208,7 +209,7 @@ private:
 	double preampGain = 0.0;
 	QDoubleSpinBox* preampSpin;
 	QButtonGroup* profileButtonGroup;
-	QVector<QRadioButton*> profileButtons;
+	std::vector<QRadioButton*> profileButtons;
 	QStringList includeLines;
 	QGroupBox* profilesGroupBox;
 };
