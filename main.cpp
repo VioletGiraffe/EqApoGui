@@ -15,9 +15,21 @@
 #include <QMenu>
 #include <QAction>
 #include <QProcess>
+#include <QInputDialog>
 
 #include <stdexcept>
 #include <vector>
+
+inline bool tryOpenFile(QFile& file, QIODevice::OpenMode mode)
+{
+	for (int attempt = 0; attempt < 5; ++attempt)
+	{
+		if (file.open(mode))
+			return true;
+		QThread::msleep(20);
+	}
+	return false;
+}
 
 class ApoSwitcher final : public QMainWindow {
 public:
@@ -43,6 +55,13 @@ public:
 		profileButtonGroup = new QButtonGroup(this);
 		profileButtonGroup->setExclusive(false); // Allow none selected
 		mainLayout->addWidget(profilesGroupBox);
+		// New config button
+		auto* buttonsLayout = new QHBoxLayout;
+		buttonsLayout->setSpacing(1);
+		QPushButton* newConfigButton = new QPushButton("Create new EQ", this);
+		buttonsLayout->addWidget(newConfigButton);
+		connect(newConfigButton, &QPushButton::clicked, this, &ApoSwitcher::createNewConfig);
+		mainLayout->addLayout(buttonsLayout);
 		mainLayout->addStretch();
 		setCentralWidget(centralWidget);
 
@@ -55,6 +74,67 @@ public:
 	}
 
 private:
+	void createNewConfig()
+	{
+		QString fileName = QInputDialog::getText(this, "New Config File",
+			"Enter config file name (you can include or omit the .txt extension):", QLineEdit::Normal, "").trimmed();
+
+		if (fileName.isEmpty())
+			return;
+
+		if (!fileName.endsWith(".txt", Qt::CaseInsensitive))
+			fileName += ".txt";
+
+		const QString filePath = configFolder + "/" + fileName;
+
+		{
+			QFile file(filePath);
+			if (!file.exists())
+			{
+				if (!file.open(QIODevice::WriteOnly))
+				{
+					QMessageBox::warning(this, "Error", "Failed to create file: " + file.errorString());
+					return;
+				}
+			}
+		}
+
+		// Append the new config to config.txt as a commented Include so it appears in the UI
+		{
+			QFile cfg(configFolder + "/config.txt");
+			if (!tryOpenFile(cfg, QIODevice::Append | QIODevice::Text)) {
+				QMessageBox::warning(this, "Error", "Failed to open config.txt for appending: " + cfg.errorString());
+				return;
+			}
+
+			const QString includeLine = QString("#Include: %1\n").arg(fileName);
+			bool includeExists = false;
+			for (const QString& line : std::as_const(includeLines))
+			{
+				if (line.contains(fileName, Qt::CaseInsensitive) == 0)
+				{
+					includeExists = true;
+					break;
+				}
+			}
+
+			if (!includeExists)
+			{
+				const QByteArray data = includeLine.toLatin1();
+				if (cfg.write(data) != data.size())
+				{
+					QMessageBox::warning(this, "Error", "Failed to write to config.txt: " + cfg.errorString());
+					return;
+				}
+			}
+		}
+
+		// Refresh UI to reflect the newly added (but commented-out) profile
+		loadConfig();
+
+		QProcess::startDetached("notepad.exe", { filePath });
+	}
+
 	void applyChanges()
 	{
 		try {
@@ -77,17 +157,7 @@ private:
 
 			// Write back to file
 			QFile configFile(configFolder + "/config.txt");
-			const auto tryOpenFile = [&]() -> bool {
-				for (size_t attempt = 0; attempt < 5; ++attempt) {
-					if (configFile.open(QIODevice::WriteOnly))
-						return true;
-
-					QThread::msleep(20);
-				}
-				return false;
-				};
-
-			if (!tryOpenFile())
+			if (!tryOpenFile(configFile, QFile::WriteOnly))
 				throw std::runtime_error("Failed to open config for writing: " + configFile.errorString().toStdString());
 
 			for (const QString& line : std::as_const(newConfig))
@@ -110,6 +180,14 @@ private:
 	void loadConfig()
 	{
 		try {
+			for (auto* btn : profileButtons) {
+				profileButtonGroup->removeButton(btn);
+				profilesGroupBox->layout()->removeWidget(btn);
+				btn->deleteLater();
+			}
+			profileButtons.clear();
+			includeLines.clear();
+
 			QFile configFile(configFolder + "/config.txt");
 			if (!configFile.open(QIODevice::ReadOnly | QIODevice::Text))
 				throw std::runtime_error("Failed to open config for reading: " + configFile.errorString().toStdString());
@@ -118,8 +196,6 @@ private:
 			in.setEncoding(QStringConverter::Utf8);
 
 			QString line;
-			includeLines.clear();
-			profileButtons.clear();
 			bool preampFound = false;
 			while (in.readLineInto(&line))
 			{
@@ -143,13 +219,15 @@ private:
 				}
 				else if (cleanLine.startsWith("Include:", Qt::CaseInsensitive)) {
 					includeLines << cleanLine;
-					QRadioButton* profileRadio = new QRadioButton(cleanLine, this);
+
+					const QString configFileName = cleanLine.mid(cleanLine.indexOf(':') + 1).trimmed();
+					QRadioButton* profileRadio = new QRadioButton(configFileName, this);
 					profileRadio->setChecked(!isCommented);
 					profileButtonGroup->addButton(profileRadio);
 					profileButtons.push_back(profileRadio);
 					profilesGroupBox->layout()->addWidget(profileRadio);
 
-					const QString filePath = configFolder + '/' +  cleanLine.mid(cleanLine.indexOf(':') + 1).trimmed();
+					const QString filePath = configFolder + '/' + configFileName;
 					profileRadio->setContextMenuPolicy(Qt::CustomContextMenu);
 					connect(profileRadio, &QWidget::customContextMenuRequested, this, [this, profileRadio, filePath](const QPoint& pos) {
 						QMenu contextMenu(this);
@@ -169,7 +247,7 @@ private:
 							if (button != profileRadio)
 								button->setChecked(false);
 						}
-					});
+						});
 				}
 				// Ignore other lines for simplicity
 			}
