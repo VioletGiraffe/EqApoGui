@@ -10,33 +10,41 @@
 #include <QGroupBox>
 #include <QStringList>
 #include <QThread>
-
 #include <stdexcept>
+#include <QDoubleSpinBox>
+#include <QHBoxLayout>
 
 class ApoSwitcher final : public QMainWindow {
 public:
-	ApoSwitcher(QWidget *parent = nullptr) : QMainWindow(parent) {
+	ApoSwitcher(QWidget* parent = nullptr) : QMainWindow(parent) {
 		setWindowTitle("Equalizer APO Profile Switcher");
-		QWidget *centralWidget = new QWidget(this);
-		QVBoxLayout *mainLayout = new QVBoxLayout(centralWidget);
+		QWidget* centralWidget = new QWidget(this);
+		QVBoxLayout* mainLayout = new QVBoxLayout(centralWidget);
 		// Preamp section
 		preampCheck = new QCheckBox("Preamp", this);
-		mainLayout->addWidget(preampCheck);
+		preampSpin = new QDoubleSpinBox(this);
+		preampSpin->setRange(-30.0, 30.0);
+		preampSpin->setSingleStep(0.5);
+		preampSpin->setSuffix(" dB");
+		preampSpin->setEnabled(false);
+		QHBoxLayout* preampLayout = new QHBoxLayout;
+		preampLayout->addWidget(preampCheck);
+		preampLayout->addWidget(preampSpin);
+		mainLayout->addLayout(preampLayout);
 		// Profiles section
 		profilesGroupBox = new QGroupBox("EQ Profiles", this);
 		profilesGroupBox->setLayout(new QVBoxLayout);
-
 		profileButtonGroup = new QButtonGroup(this);
 		profileButtonGroup->setExclusive(false); // Allow none selected
 		mainLayout->addWidget(profilesGroupBox);
 		mainLayout->addStretch();
 		setCentralWidget(centralWidget);
-
 		configPath = "C:/Program Files/EqualizerAPO/config/config.txt"; // Adjust if needed
 		loadConfig();
-
 		connect(profileButtonGroup, &QButtonGroup::buttonToggled, this, &ApoSwitcher::applyChanges);
 		connect(preampCheck, &QCheckBox::toggled, this, &ApoSwitcher::applyChanges);
+		connect(preampCheck, &QCheckBox::toggled, preampSpin, &QDoubleSpinBox::setEnabled);
+		connect(preampSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &ApoSwitcher::applyChanges);
 	}
 
 private:
@@ -45,21 +53,20 @@ private:
 			// Collect active items
 			QStringList newConfig;
 			// Preamp
-			if (preampCheck->isChecked() && !preampLine.isEmpty())
-				newConfig << preampLine;
-
-			else if (!preampCheck->isChecked() && !preampLine.isEmpty())
-				newConfig << "#" + preampLine; // Comment out if disabled
+			QString currentPreampLine = QString("Preamp: %1 dB").arg(preampSpin->value(), 0, 'f', 1);
+			if (!preampCheck->isChecked())
+				currentPreampLine.prepend("#"); // Comment out if disabled
+			newConfig << currentPreampLine;
 
 			// Profiles
 			for (int i = 0; i < profileButtons.size(); ++i) {
 				if (profileButtons[i]->isChecked())
 					newConfig << includeLines[i];
-
 				else
 					newConfig << "#" + includeLines[i]; // Comment out disabled
 
 			}
+
 			// Write back to file
 			QFile configFile(configPath);
 			const auto tryOpenFile = [&]() -> bool {
@@ -80,13 +87,14 @@ private:
 				const QByteArray data = line.toLatin1().append('\n');
 				if (configFile.write(data) != data.size())
 					throw std::runtime_error("Failed to write to config file: " + configFile.errorString().toStdString());
-			}
 
+			}
 			configFile.close();
 			if (configFile.error() != QFileDevice::NoError)
 				throw std::runtime_error("Error closing config after writing: " + configFile.errorString().toStdString());
 
-		} catch (const std::exception& e) {
+		}
+		catch (const std::exception& e) {
 			QMessageBox::warning(this, "Error", QString::fromStdString(e.what()));
 		}
 	}
@@ -98,10 +106,14 @@ private:
 				throw std::runtime_error("Failed to open config for reading: " + configFile.errorString().toStdString());
 
 			QTextStream in(&configFile);
+			in.setEncoding(QStringConverter::Utf8);
+
 			QString line;
 			includeLines.clear();
 			profileButtons.clear();
-			while (in.readLineInto(&line)) {
+			bool preampFound = false;
+			while (in.readLineInto(&line))
+			{
 				line = line.trimmed();
 				if (line.isEmpty())
 					continue;
@@ -109,26 +121,38 @@ private:
 				const bool isCommented = line.startsWith("#");
 				QString cleanLine = isCommented ? line.mid(1).trimmed() : line;
 				if (cleanLine.startsWith("Preamp:", Qt::CaseInsensitive)) {
-					preampLine = cleanLine;
-					preampCheck->setChecked(!isCommented);
-				} else if (cleanLine.startsWith("Include:", Qt::CaseInsensitive)) {
+					QString gainStr = cleanLine.remove("Preamp:", Qt::CaseInsensitive).remove("dB", Qt::CaseInsensitive).trimmed();
+					bool ok = false;
+					const double gain = gainStr.toDouble(&ok);
+					if (ok) {
+						preampGain = gain;
+						preampSpin->setValue(preampGain);
+						preampCheck->setChecked(!isCommented);
+						preampSpin->setEnabled(!isCommented);
+						preampFound = true;
+					}
+				}
+				else if (cleanLine.startsWith("Include:", Qt::CaseInsensitive)) {
 					includeLines << cleanLine;
-					QRadioButton *profileRadio = new QRadioButton(cleanLine, this);
+					QRadioButton* profileRadio = new QRadioButton(cleanLine, this);
 					profileRadio->setChecked(!isCommented);
 					profileButtonGroup->addButton(profileRadio);
 					profileButtons << profileRadio;
 					profilesGroupBox->layout()->addWidget(profileRadio);
 					connect(profileRadio, &QRadioButton::toggled, [this, profileRadio](bool checked) {
-						if (checked)
-							for (auto* button : profileButtons) {
-								if (button != profileRadio)
-									button->setChecked(false);
+						if (!checked)
+							return;
 
-							}
+						for (auto* button : profileButtons)
+						{
+							if (button != profileRadio)
+								button->setChecked(false);
+						}
 					});
 				}
 				// Ignore other lines for simplicity
 			}
+
 			if (in.status() != QTextStream::Ok && in.status() != QTextStream::ReadPastEnd)
 				throw std::runtime_error("Error while reading config: " + configFile.errorString().toStdString());
 
@@ -136,6 +160,10 @@ private:
 			if (configFile.error() != QFileDevice::NoError)
 				throw std::runtime_error("Error closing config after reading: " + configFile.errorString().toStdString());
 
+			if (!preampFound) {
+				preampSpin->setValue(0.0);
+				preampCheck->setChecked(false);
+			}
 			// If multiple profiles were active, warn or handle (but per spec, enforce one)
 			int activeCount = 0;
 			for (auto* button : profileButtons)
@@ -148,21 +176,21 @@ private:
 
 			}
 			adjustSize();
-		} catch (const std::exception& e) {
+		}
+		catch (const std::exception& e) {
 			QMessageBox::warning(this, "Error", QString::fromStdString(e.what()));
 		}
 	}
 	QString configPath;
-	QCheckBox *preampCheck;
-	QString preampLine;
-	QButtonGroup *profileButtonGroup;
+	QCheckBox* preampCheck;
+	double preampGain = 0.0;
+	QDoubleSpinBox* preampSpin;
+	QButtonGroup* profileButtonGroup;
 	QVector<QRadioButton*> profileButtons;
 	QStringList includeLines;
-	QGroupBox *profilesGroupBox;
+	QGroupBox* profilesGroupBox;
 };
-
-
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
 	QApplication app(argc, argv);
 	ApoSwitcher window;
 	window.show();
