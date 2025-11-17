@@ -126,8 +126,8 @@ void MainWindow::createNewConfig()
 
 		if (!includeExists)
 		{
-			const QByteArray data = includeLine.toLatin1();
-			if (cfg.write(data) != data.size())
+			cfg.write(includeLine.toUtf8());
+			if (cfg.error() != QFile::NoError)
 			{
 				QMessageBox::warning(this, "Error", "Failed to write to config.txt: " + cfg.errorString());
 				return;
@@ -168,13 +168,11 @@ void MainWindow::applyChanges()
 
 		for (const QString& line : std::as_const(newConfig))
 		{
-			const QByteArray data = line.toLatin1().append('\n');
-			if (configFile.write(data) != data.size())
-				throw std::runtime_error("Failed to write to config file: " + configFile.errorString().toStdString());
-
+			configFile.write(line.toUtf8().append('\n'));
 		}
+
 		configFile.close();
-		if (configFile.error() != QFileDevice::NoError)
+		if (configFile.error() != QFile::NoError)
 			throw std::runtime_error("Error closing config after writing: " + configFile.errorString().toStdString());
 
 	}
@@ -262,7 +260,7 @@ void MainWindow::loadConfig()
 			throw std::runtime_error("Error while reading config: " + configFile.errorString().toStdString());
 
 		configFile.close();
-		if (configFile.error() != QFileDevice::NoError)
+		if (configFile.error() != QFile::NoError)
 			throw std::runtime_error("Error closing config after reading: " + configFile.errorString().toStdString());
 
 		if (!preampFound) {
