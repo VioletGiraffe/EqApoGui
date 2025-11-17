@@ -137,8 +137,7 @@ void MainWindow::createNewConfig()
 
 	// Refresh UI to reflect the newly added (but commented-out) profile
 	loadConfig();
-
-	QProcess::startDetached("notepad.exe", { filePath });
+	editFile(filePath);
 }
 
 void MainWindow::applyChanges()
@@ -231,13 +230,12 @@ void MainWindow::loadConfig()
 				profileButtons.push_back(profileRadio);
 				profilesGroupBox->layout()->addWidget(profileRadio);
 
-				const QString filePath = configFolder + '/' + configFileName;
 				profileRadio->setContextMenuPolicy(Qt::CustomContextMenu);
-				connect(profileRadio, &QWidget::customContextMenuRequested, this, [this, profileRadio, filePath](QPoint pos) {
+				connect(profileRadio, &QWidget::customContextMenuRequested, this, [this, profileRadio, configFileName](QPoint pos) {
 					QMenu contextMenu(this);
 					QAction* openAction = contextMenu.addAction("Open in Notepad");
-					connect(openAction, &QAction::triggered, [filePath]() {
-						QProcess::startDetached("notepad.exe", { filePath });
+					connect(openAction, &QAction::triggered, [this, configFileName]() {
+						editFile(configFileName);
 					});
 					contextMenu.exec(profileRadio->mapToGlobal(pos));
 				});
@@ -287,5 +285,13 @@ void MainWindow::loadConfig()
 
 void MainWindow::editConfigTxt()
 {
-	QProcess::startDetached("notepad.exe", { configFolder + "/config.txt" });
+	editFile("config.txt");
+}
+
+void MainWindow::editFile(QString fileName)
+{
+	if (!fileName.contains(':'))
+		fileName = configFolder + '/' + fileName;
+
+	QProcess::startDetached("notepad.exe", { fileName });
 }

@@ -20,6 +20,7 @@ private:
 	void applyChanges();
 	void loadConfig();
 	void editConfigTxt();
+	void editFile(QString fileName);
 
 private:
 	const QString configFolder = "C:/Program Files/EqualizerAPO/config"; // Adjust if needed;
