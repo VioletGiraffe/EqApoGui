@@ -1,7 +1,7 @@
 #pragma once
+#include "EqApoConfig.h"
 
 #include <QMainWindow>
-#include <QStringList>
 
 #include <vector>
 
@@ -23,14 +23,11 @@ private:
 	void editFile(QString fileName);
 
 private:
-	const QString configFolder = "C:/Program Files/EqualizerAPO/config"; // Adjust if needed;
-
+	EqApoConfig _config;
 	std::vector<QRadioButton*> profileButtons;
-	QStringList includeLines;
 
 	QCheckBox* preampCheck = nullptr;
 	QDoubleSpinBox* preampSpin = nullptr;
-	double preampGain = 0.0;
 
 	QButtonGroup* profileButtonGroup = nullptr;
 	QGroupBox* profilesGroupBox = nullptr;

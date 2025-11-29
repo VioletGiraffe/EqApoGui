@@ -1,6 +1,6 @@
 QT = core gui widgets
 
-CONFIG += c++2a
+CONFIG += c++latest
 
 msvc*{
 	QMAKE_CXXFLAGS += /MP

@@ -11,25 +11,11 @@
 #include <QPushButton>
 #include <QRadioButton>
 #include <QStringList>
-#include <QThread>
 #include <QVBoxLayout>
 #include <QMenu>
 #include <QAction>
 #include <QProcess>
 #include <QInputDialog>
-
-#include <stdexcept>
-
-static bool tryOpenFile(QFile& file, QIODevice::OpenMode mode)
-{
-	for (int attempt = 0; attempt < 5; ++attempt)
-	{
-		if (file.open(mode))
-			return true;
-		QThread::msleep(20);
-	}
-	return false;
-}
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 {
@@ -88,199 +74,80 @@ void MainWindow::createNewConfig()
 	if (fileName.isEmpty())
 		return;
 
-	if (!fileName.endsWith(".txt", Qt::CaseInsensitive))
-		fileName += ".txt";
-
-	const QString filePath = configFolder + "/" + fileName;
-
+	const auto result = _config.createNewProfile(fileName);
+	if (!result.has_value())
 	{
-		QFile file(filePath);
-		if (!file.exists())
-		{
-			if (!file.open(QIODevice::WriteOnly))
-			{
-				QMessageBox::warning(this, "Error", "Failed to create file: " + file.errorString());
-				return;
-			}
-		}
+		QMessageBox::critical(this, "Error", result.error());
+		return;
 	}
 
-	// Append the new config to config.txt as a commented Include so it appears in the UI
-	{
-		QFile cfg(configFolder + "/config.txt");
-		if (!tryOpenFile(cfg, QIODevice::Append | QIODevice::Text)) {
-			QMessageBox::warning(this, "Error", "Failed to open config.txt for appending: " + cfg.errorString());
-			return;
-		}
-
-		const QString includeLine = QString("#Include: %1\n").arg(fileName);
-		bool includeExists = false;
-		for (const QString& line : std::as_const(includeLines))
-		{
-			if (line.contains(fileName, Qt::CaseInsensitive) == 0)
-			{
-				includeExists = true;
-				break;
-			}
-		}
-
-		if (!includeExists)
-		{
-			cfg.write(includeLine.toUtf8());
-			if (cfg.error() != QFile::NoError)
-			{
-				QMessageBox::warning(this, "Error", "Failed to write to config.txt: " + cfg.errorString());
-				return;
-			}
-		}
-	}
-
-	// Refresh UI to reflect the newly added (but commented-out) profile
+	// Refresh UI to reflect the newly added profile
 	loadConfig();
-	editFile(filePath);
+	editFile(result.value());
 }
 
 void MainWindow::applyChanges()
 {
-	try {
-		// Collect active items
-		QStringList newConfig;
-		// Preamp
-		QString currentPreampLine = QString("Preamp: %1 dB").arg(preampSpin->value(), 0, 'f', 1);
-		if (!preampCheck->isChecked())
-			currentPreampLine.prepend("#"); // Comment out if disabled
-		newConfig << currentPreampLine;
+	assert(profileButtons.size() == _config.profiles().size());
 
-		// Profiles
-		for (int i = 0; i < profileButtons.size(); ++i) {
-			if (profileButtons[i]->isChecked())
-				newConfig << includeLines[i];
-			else
-				newConfig << "#" + includeLines[i]; // Comment out disabled
-
-		}
-
-		// Write back to file
-		QFile configFile(configFolder + "/config.txt");
-		if (!tryOpenFile(configFile, QFile::WriteOnly))
-			throw std::runtime_error("Failed to open config for writing: " + configFile.errorString().toStdString());
-
-		for (const QString& line : std::as_const(newConfig))
-		{
-			configFile.write(line.toUtf8().append('\n'));
-		}
-
-		configFile.close();
-		if (configFile.error() != QFile::NoError)
-			throw std::runtime_error("Error closing config after writing: " + configFile.errorString().toStdString());
-
+	_config.setPreampGain(preampSpin->value(), preampCheck->isChecked());
+	for (size_t i = 0; i < profileButtons.size(); ++i)
+	{
+		auto* btn = profileButtons[i];
+		_config.setProfileEnabled(i, btn->isChecked());
 	}
-	catch (const std::exception& e) {
-		QMessageBox::warning(this, "Error", QString::fromStdString(e.what()));
-	}
+
+	if (const auto result = _config.saveState(); !result)
+		QMessageBox::critical(this, "Error", result.error());
 }
 
 void MainWindow::loadConfig()
 {
-	try {
-		for (auto* btn : profileButtons) {
-			profileButtonGroup->removeButton(btn);
-			profilesGroupBox->layout()->removeWidget(btn);
-			btn->deleteLater();
-		}
-		profileButtons.clear();
-		includeLines.clear();
-
-		QFile configFile(configFolder + "/config.txt");
-		if (!configFile.open(QIODevice::ReadOnly | QIODevice::Text))
-			throw std::runtime_error("Failed to open config for reading: " + configFile.errorString().toStdString());
-
-		QTextStream in(&configFile);
-		in.setEncoding(QStringConverter::Utf8);
-
-		QString line;
-		bool preampFound = false;
-		while (in.readLineInto(&line))
-		{
-			line = line.trimmed();
-			if (line.isEmpty())
-				continue;
-
-			const bool isCommented = line.startsWith("#");
-			QString cleanLine = isCommented ? line.mid(1).trimmed() : line;
-			if (cleanLine.startsWith("Preamp:", Qt::CaseInsensitive)) {
-				QString gainStr = cleanLine.remove("Preamp:", Qt::CaseInsensitive).remove("dB", Qt::CaseInsensitive).trimmed();
-				bool ok = false;
-				const double gain = gainStr.toDouble(&ok);
-				if (ok) {
-					preampGain = gain;
-					preampSpin->setValue(preampGain);
-					preampCheck->setChecked(!isCommented);
-					preampSpin->setEnabled(!isCommented);
-					preampFound = true;
-				}
-			}
-			else if (cleanLine.startsWith("Include:", Qt::CaseInsensitive)) {
-				includeLines << cleanLine;
-
-				const QString configFileName = cleanLine.mid(cleanLine.indexOf(':') + 1).trimmed();
-				QRadioButton* profileRadio = new QRadioButton(configFileName, this);
-				profileRadio->setChecked(!isCommented);
-				profileButtonGroup->addButton(profileRadio);
-				profileButtons.push_back(profileRadio);
-				profilesGroupBox->layout()->addWidget(profileRadio);
-
-				profileRadio->setContextMenuPolicy(Qt::CustomContextMenu);
-				connect(profileRadio, &QWidget::customContextMenuRequested, this, [this, profileRadio, configFileName](QPoint pos) {
-					QMenu contextMenu(this);
-					QAction* openAction = contextMenu.addAction("Open in Notepad");
-					connect(openAction, &QAction::triggered, [this, configFileName]() {
-						editFile(configFileName);
-					});
-					contextMenu.exec(profileRadio->mapToGlobal(pos));
-				});
-
-				connect(profileRadio, &QRadioButton::toggled, [this, profileRadio](bool checked) {
-					if (!checked)
-						return;
-
-					for (auto* button : profileButtons)
-					{
-						if (button != profileRadio)
-							button->setChecked(false);
-					}
-				});
-			}
-			// Ignore other lines for simplicity
-		}
-
-		if (in.status() != QTextStream::Ok && in.status() != QTextStream::ReadPastEnd)
-			throw std::runtime_error("Error while reading config: " + configFile.errorString().toStdString());
-
-		configFile.close();
-		if (configFile.error() != QFile::NoError)
-			throw std::runtime_error("Error closing config after reading: " + configFile.errorString().toStdString());
-
-		if (!preampFound) {
-			preampSpin->setValue(0.0);
-			preampCheck->setChecked(false);
-		}
-		// If multiple profiles were active, warn or handle (but per spec, enforce one)
-		int activeCount = 0;
-		for (auto* button : profileButtons)
-			if (button->isChecked()) ++activeCount;
-
-		if (activeCount > 1) {
-			QMessageBox::information(this, "Note", "Multiple profiles were active; only the first will be kept enabled.");
-			for (int i = 1; i < profileButtons.size(); ++i)
-				profileButtons[i]->setChecked(false);
-
-		}
-		adjustSize();
+	for (auto* btn : profileButtons)
+	{
+		profileButtonGroup->removeButton(btn);
+		profilesGroupBox->layout()->removeWidget(btn);
+		btn->deleteLater();
 	}
-	catch (const std::exception& e) {
-		QMessageBox::warning(this, "Error", QString::fromStdString(e.what()));
+
+	profileButtons.clear();
+	const auto result = _config.reloadConfig();
+	if (!result)
+		QMessageBox::critical(this, "Error", result.error());
+
+	for (const auto& profile: _config.profiles())
+	{
+		QRadioButton* profileRadio = new QRadioButton(profile.name, this);
+		profileRadio->setChecked(profile.enabled);
+		profileButtonGroup->addButton(profileRadio);
+		profileButtons.push_back(profileRadio);
+		profilesGroupBox->layout()->addWidget(profileRadio);
+
+		profileRadio->setContextMenuPolicy(Qt::CustomContextMenu);
+		connect(profileRadio, &QWidget::customContextMenuRequested, this, [this, profileRadio, name{ profile.name }](QPoint pos) {
+			QMenu contextMenu(this);
+			QAction* openAction = contextMenu.addAction("Open in Notepad");
+			connect(openAction, &QAction::triggered, [this, name]() {
+				editFile(name);
+			});
+			contextMenu.exec(profileRadio->mapToGlobal(pos));
+		});
+
+		connect(profileRadio, &QRadioButton::toggled, [this, profileRadio](bool checked) {
+			if (!checked)
+				return;
+			for (auto* button : profileButtons)
+			{
+				if (button != profileRadio)
+					button->setChecked(false);
+			}
+		});
 	}
+
+	const auto preamp = _config.preamp();
+	preampSpin->setValue(preamp.gain);
+	preampSpin->setEnabled(preamp.enabled);
+	preampCheck->setChecked(preamp.enabled);
 }
 
 void MainWindow::editConfigTxt()
@@ -291,7 +158,7 @@ void MainWindow::editConfigTxt()
 void MainWindow::editFile(QString fileName)
 {
 	if (!fileName.contains(':'))
-		fileName = configFolder + '/' + fileName;
+		fileName = _config.configFolder() + '/' + fileName;
 
 	QProcess::startDetached("notepad.exe", { fileName });
 }
