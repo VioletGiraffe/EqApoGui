@@ -30,7 +30,6 @@ jobs:
     - name: Build installer
       shell: cmd
       run: |
-        set
         build_installer.bat
 
     - name: Upload installer artifact
