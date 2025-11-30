@@ -31,8 +31,11 @@ jobs:
       uses: microsoft/setup-msbuild@v2
 
     - name: Build installer
-      run: .\build_installer.bat
       shell: cmd
+      run: |
+        echo %Qt6_DIR%
+        dir %Qt6_DIR%
+        build_installer.bat
 
     - name: Upload installer artifact
       uses: actions/upload-artifact@v4
