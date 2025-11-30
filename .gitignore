@@ -5,6 +5,7 @@
 *.VC.db
 .vs/
 .qtc_clangd/
+build/
 
 # Build results
 [Dd]ebug/

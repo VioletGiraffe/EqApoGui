@@ -1,0 +1,60 @@
+name: Build Windows Installer
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+env:
+  QT_VERSION: 6.9.3
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v4
+      with:
+        version: ${{ env.QT_VERSION }}
+        host: windows
+        target: desktop
+        arch: win64_msvc2022_64
+        cache: true
+
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Install Inno Setup
+      run: |
+        choco install innosetup -y
+        echo "C:\Program Files (x86)\Inno Setup 6" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+    - name: Set Qt environment variables
+      run: |
+        echo "QT_DIR=${{ env.Qt6_DIR }}" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        echo "INNO_SETUP=C:\Program Files (x86)\Inno Setup 6" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+    - name: Build installer
+      run: .\build_installer.bat
+      shell: cmd
+
+    - name: Upload installer artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: EqApoGuiSetup
+        path: Output\EqApoGuiSetup.exe
+        if-no-files-found: error
+
+    - name: Create Release (on tag)
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: Output\EqApoGuiSetup.exe
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
