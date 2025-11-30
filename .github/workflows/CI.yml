@@ -30,10 +30,6 @@ jobs:
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
 
-    - name: Set Qt environment variables
-      run: |
-        echo "QT_DIR=${{ env.Qt6_DIR }}" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
     - name: Build installer
       run: .\build_installer.bat
       shell: cmd
