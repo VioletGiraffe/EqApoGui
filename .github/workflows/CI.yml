@@ -30,15 +30,9 @@ jobs:
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
 
-    - name: Install Inno Setup
-      run: |
-        choco install innosetup -y
-        echo "C:\Program Files (x86)\Inno Setup 6" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-
     - name: Set Qt environment variables
       run: |
         echo "QT_DIR=${{ env.Qt6_DIR }}" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-        echo "INNO_SETUP=C:\Program Files (x86)\Inno Setup 6" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
     - name: Build installer
       run: .\build_installer.bat
@@ -48,13 +42,17 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: EqApoGuiSetup
-        path: Output\EqApoGuiSetup.exe
+        path: EqApoGuiSetup.exe
         if-no-files-found: error
 
     - name: Create Release (on tag)
-      if: startsWith(github.ref, 'refs/tags/')
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
+      if: success() && startsWith(github.ref, 'refs/tags/')
       with:
-        files: Output\EqApoGuiSetup.exe
+        files: EqApoGuiSetup.exe
+        token: ${{ secrets.GITHUB_TOKEN }}
+        tag_name: ${{ github.ref }}
+        name: ${{ github.ref_name }}
+        body: ${{steps.build_changelog.outputs.changelog}}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
