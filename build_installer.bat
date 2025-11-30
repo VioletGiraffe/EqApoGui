@@ -6,15 +6,17 @@ echo Building EqApoGui Installer
 echo ========================================
 
 :: Set paths - these will be overridden by environment variables if set
-if "%QT_DIR%"=="" set QT_DIR=C:\Qt\6.9.3\msvc2022_64
+if "%Qt6_DIR%"=="" set Qt6_DIR=C:\Qt\6.9.3\msvc2022_64
 if "%INNO_SETUP%"=="" set INNO_SETUP=C:\Program Files (x86)\Inno Setup 6
 
-set PATH=%QT_DIR%\bin;%PATH%
+set PATH=%Qt6_DIR%\bin;%PATH%
 
 :: Verify Qt exists
-if not exist "%QT_DIR%\bin\qmake.exe" (
-	echo ERROR: Qt not found at %QT_DIR%
+if not exist "%Qt6_DIR%\bin\qmake.exe" (
+	echo ERROR: Qt not found at %Qt6_DIR%
 	exit /b 1
+) else (
+	echo using Qt at %Qt6_DIR%
 )
 
 :: Verify Inno Setup exists
