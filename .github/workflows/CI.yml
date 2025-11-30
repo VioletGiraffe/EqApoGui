@@ -33,8 +33,9 @@ jobs:
     - name: Build installer
       shell: cmd
       run: |
-        echo %Qt6_DIR%
-        dir %Qt6_DIR%
+        echo ${{ env.Qt6_DIR }}
+        dir ${{ env.Qt6_DIR }}
+        set Qt6_DIR=${{ env.Qt6_DIR }}
         build_installer.bat
 
     - name: Upload installer artifact
