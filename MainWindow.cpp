@@ -3,6 +3,7 @@
 #include <QButtonGroup>
 #include <QCheckBox>
 #include <QDoubleSpinBox>
+#include <QDesktopServices>
 #include <QFile>
 #include <QGroupBox>
 #include <QHBoxLayout>
@@ -65,6 +66,12 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 	QPushButton* reloadFromDisk = new QPushButton("Reload from disk", this);
 	connect(reloadFromDisk, &QPushButton::clicked, this, &MainWindow::loadConfig);
 	buttonsLayout->addWidget(reloadFromDisk);
+
+	QPushButton* openFolder = new QPushButton("Open config folder", this);
+	connect(openFolder, &QPushButton::clicked, this, [this] {
+		QDesktopServices::openUrl(QUrl::fromLocalFile(_config.configFolder()));
+	});
+	buttonsLayout->addWidget(openFolder);
 
 	mainLayout->addLayout(buttonsLayout);
 	//mainLayout->addStretch();
