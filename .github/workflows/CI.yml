@@ -53,37 +53,44 @@ jobs:
       run: |
         $ErrorActionPreference = "Stop"
 
-        # Current tag name (strip refs/tags/)
+        # Extract current tag name (strip refs/tags/)
         $currentTag = $env:CURRENT_REF -replace '^refs/tags/', ''
 
+        # Ensure tags are present
         git fetch --tags --prune
 
-        # Get tags sorted by creation date (newest first), excluding current tag
+        # Find previous tag (newest first, excluding current tag)
         $tags = git tag --sort=-creatordate
         $prevTag = $tags | Where-Object { $_ -ne $currentTag } | Select-Object -First 1
 
         if ([string]::IsNullOrEmpty($prevTag)) {
-          $range = $currentTag
           $title = "Changes up to $currentTag"
-        } else {
-          $range = "$prevTag..$currentTag"
-          $title = "Changes since $prevTag"
-        }
 
-        # Build markdown changelog
-        $commits = git log `
-          --pretty=format:"- %s ([%h]($($env:GITHUB_SERVER_URL)/$($env:GITHUB_REPOSITORY)/commit/%H))" `
-          $range
+          $commits = git log `
+            $currentTag `
+            --pretty=format:"- %s ([%h]($($env:GITHUB_SERVER_URL)/$($env:GITHUB_REPOSITORY)/commit/%H))"
+        }
+        else {
+          $title = "Changes since $prevTag"
+
+          # Resolve the commit the previous tag points to and exclude it explicitly
+          $prevCommit = git rev-list -n 1 $prevTag
+
+          $commits = git log `
+            $currentTag `
+            --not $prevCommit `
+            --pretty=format:"- %s ([%h]($($env:GITHUB_SERVER_URL)/$($env:GITHUB_REPOSITORY)/commit/%H))"
+        }
 
         if ([string]::IsNullOrWhiteSpace($commits)) {
           $commits = "(no commits)"
         }
 
-        # Write multiline output
-        "body<<EOF"            | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-        "$title`n"             | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-        $commits               | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-        "EOF"                  | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+        # Write multiline output for softprops/action-gh-release
+        "body<<EOF" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+        "$title`n"  | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+        $commits    | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+        "EOF"       | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
     - name: Create Release (on tag)
       uses: softprops/action-gh-release@v2
