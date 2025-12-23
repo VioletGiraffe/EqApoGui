@@ -16,6 +16,9 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 # required to access full history and tags
+        tags: true
 
     - name: Install Qt
       uses: jurplel/install-qt-action@v4
@@ -40,6 +43,48 @@ jobs:
         path: EqApoGuiSetup.exe
         if-no-files-found: error
 
+    - name: Generate changelog (commits between previous tag and this tag)
+      id: changelog
+      shell: pwsh
+      env:
+        GITHUB_SERVER_URL: ${{ github.server_url }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        CURRENT_REF: ${{ github.ref }}
+      run: |
+        $ErrorActionPreference = "Stop"
+
+        # Current tag name (strip refs/tags/)
+        $currentTag = $env:CURRENT_REF -replace '^refs/tags/', ''
+
+        git fetch --tags --prune
+
+        # Get tags sorted by creation date (newest first), excluding current tag
+        $tags = git tag --sort=-creatordate
+        $prevTag = $tags | Where-Object { $_ -ne $currentTag } | Select-Object -First 1
+
+        if ([string]::IsNullOrEmpty($prevTag)) {
+          $range = $currentTag
+          $title = "Changes up to $currentTag"
+        } else {
+          $range = "$prevTag..$currentTag"
+          $title = "Changes since $prevTag"
+        }
+
+        # Build markdown changelog
+        $commits = git log `
+          --pretty=format:"- %s ([%h]($($env:GITHUB_SERVER_URL)/$($env:GITHUB_REPOSITORY)/commit/%H))" `
+          $range
+
+        if ([string]::IsNullOrWhiteSpace($commits)) {
+          $commits = "(no commits)"
+        }
+
+        # Write multiline output
+        "body<<EOF"            | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+        "$title`n"             | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+        $commits               | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+        "EOF"                  | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
     - name: Create Release (on tag)
       uses: softprops/action-gh-release@v2
       if: success() && startsWith(github.ref, 'refs/tags/')
@@ -48,5 +93,4 @@ jobs:
         token: ${{ secrets.GITHUB_TOKEN }}
         tag_name: ${{ github.ref }}
         name: ${{ github.ref_name }}
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        body: ${{ steps.changelog.outputs.body }}
