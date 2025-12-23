@@ -16,11 +16,13 @@
 #include <QAction>
 #include <QProcess>
 #include <QInputDialog>
+#include <QScrollArea>
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 {
 	setWindowTitle("Equalizer APO Profile Switcher");
 	QWidget* centralWidget = new QWidget(this);
+
 	QVBoxLayout* mainLayout = new QVBoxLayout(centralWidget);
 	// Preamp section
 	preampCheck = new QCheckBox("Preamp", this);
@@ -34,8 +36,18 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 	preampLayout->addWidget(preampSpin);
 	mainLayout->addLayout(preampLayout);
 	// Profiles section
-	profilesGroupBox = new QGroupBox("EQ Profiles", this);
-	profilesGroupBox->setLayout(new QVBoxLayout);
+	QGroupBox* profilesGroupBox = new QGroupBox("EQ Profiles", this);
+	QVBoxLayout* groupBoxLayout = new QVBoxLayout(profilesGroupBox);
+	QScrollArea* scrollArea = new QScrollArea(profilesGroupBox);
+	scrollArea->setWidgetResizable(true);  // Automatically resizes viewport widget to fit contents
+	scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+	scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+	groupBoxLayout->addWidget(scrollArea);
+
+	QWidget* scrollContent = new QWidget(scrollArea);
+	scrollLayout = new QVBoxLayout(scrollContent);
+	scrollArea->setWidget(scrollContent);
+
 	profileButtonGroup = new QButtonGroup(this);
 	profileButtonGroup->setExclusive(false); // Allow none selected
 	mainLayout->addWidget(profilesGroupBox);
@@ -55,7 +67,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 	buttonsLayout->addWidget(reloadFromDisk);
 
 	mainLayout->addLayout(buttonsLayout);
-	mainLayout->addStretch();
+	//mainLayout->addStretch();
 	setCentralWidget(centralWidget);
 
 	loadConfig();
@@ -106,7 +118,7 @@ void MainWindow::loadConfig()
 	for (auto* btn : profileButtons)
 	{
 		profileButtonGroup->removeButton(btn);
-		profilesGroupBox->layout()->removeWidget(btn);
+		scrollLayout->removeWidget(btn);
 		btn->deleteLater();
 	}
 
@@ -121,7 +133,7 @@ void MainWindow::loadConfig()
 		profileRadio->setChecked(profile.enabled);
 		profileButtonGroup->addButton(profileRadio);
 		profileButtons.push_back(profileRadio);
-		profilesGroupBox->layout()->addWidget(profileRadio);
+		scrollLayout->addWidget(profileRadio);
 
 		profileRadio->setContextMenuPolicy(Qt::CustomContextMenu);
 		connect(profileRadio, &QWidget::customContextMenuRequested, this, [this, profileRadio, name{ profile.name }](QPoint pos) {

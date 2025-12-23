@@ -8,8 +8,8 @@
 class QButtonGroup;
 class QCheckBox;
 class QDoubleSpinBox;
-class QGroupBox;
 class QRadioButton;
+class QVBoxLayout;
 
 class MainWindow final : public QMainWindow {
 public:
@@ -30,5 +30,5 @@ private:
 	QDoubleSpinBox* preampSpin = nullptr;
 
 	QButtonGroup* profileButtonGroup = nullptr;
-	QGroupBox* profilesGroupBox = nullptr;
+	QVBoxLayout* scrollLayout = nullptr;
 };
