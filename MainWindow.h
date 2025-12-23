@@ -9,6 +9,7 @@ class QButtonGroup;
 class QCheckBox;
 class QDoubleSpinBox;
 class QRadioButton;
+class QScrollArea;
 class QVBoxLayout;
 
 class MainWindow final : public QMainWindow {
@@ -31,4 +32,5 @@ private:
 
 	QButtonGroup* profileButtonGroup = nullptr;
 	QVBoxLayout* scrollLayout = nullptr;
+	QScrollArea* scrollArea = nullptr;
 };

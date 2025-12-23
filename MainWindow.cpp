@@ -1,23 +1,26 @@
 #include "MainWindow.h"
 
+#include <QAction>
 #include <QButtonGroup>
 #include <QCheckBox>
-#include <QDoubleSpinBox>
 #include <QDesktopServices>
+#include <QDoubleSpinBox>
 #include <QFile>
 #include <QGroupBox>
 #include <QHBoxLayout>
+#include <QInputDialog>
 #include <QMainWindow>
+#include <QMenu>
 #include <QMessageBox>
+#include <QProcess>
 #include <QPushButton>
 #include <QRadioButton>
-#include <QStringList>
-#include <QVBoxLayout>
-#include <QMenu>
-#include <QAction>
-#include <QProcess>
-#include <QInputDialog>
+#include <QScreen>
 #include <QScrollArea>
+#include <QScrollBar>
+#include <QStringList>
+#include <QTimer>
+#include <QVBoxLayout>
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 {
@@ -39,7 +42,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 	// Profiles section
 	QGroupBox* profilesGroupBox = new QGroupBox("EQ Profiles", this);
 	QVBoxLayout* groupBoxLayout = new QVBoxLayout(profilesGroupBox);
-	QScrollArea* scrollArea = new QScrollArea(profilesGroupBox);
+	scrollArea = new QScrollArea(profilesGroupBox);
 	scrollArea->setWidgetResizable(true);  // Automatically resizes viewport widget to fit contents
 	scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 	scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
@@ -47,6 +50,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 
 	QWidget* scrollContent = new QWidget(scrollArea);
 	scrollLayout = new QVBoxLayout(scrollContent);
+	scrollLayout->setAlignment(Qt::AlignTop);
+	scrollLayout->setContentsMargins(0, 0, 0, 0);
 	scrollArea->setWidget(scrollContent);
 
 	profileButtonGroup = new QButtonGroup(this);
@@ -83,6 +88,12 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 	connect(preampCheck, &QCheckBox::toggled, this, &MainWindow::applyChanges);
 	connect(preampCheck, &QCheckBox::toggled, preampSpin, &QDoubleSpinBox::setEnabled);
 	connect(preampSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &MainWindow::applyChanges);
+
+	// Set the window height to half of the screen height or 600, whichever is smaller
+	const int screenHeight = screen() ? screen()->size().height() : 720;
+	const int windowHeight = std::max(screenHeight * 2 / 3, 400);
+	adjustSize();
+	resize(width(), windowHeight);
 }
 
 void MainWindow::createNewConfig()
@@ -134,10 +145,16 @@ void MainWindow::loadConfig()
 	if (!result)
 		QMessageBox::critical(this, "Error", result.error());
 
+	QWidget* lastCheckedButton = nullptr;
+
 	for (const auto& profile: _config.profiles())
 	{
 		QRadioButton* profileRadio = new QRadioButton(profile.name, this);
-		profileRadio->setChecked(profile.enabled);
+		if (profile.enabled)
+		{
+			profileRadio->setChecked(true);
+			lastCheckedButton = profileRadio;
+		}
 		profileButtonGroup->addButton(profileRadio);
 		profileButtons.push_back(profileRadio);
 		scrollLayout->addWidget(profileRadio);
@@ -167,6 +184,11 @@ void MainWindow::loadConfig()
 	preampSpin->setValue(preamp.gain);
 	preampSpin->setEnabled(preamp.enabled);
 	preampCheck->setChecked(preamp.enabled);
+
+	QTimer::singleShot(0, this, [this, lastCheckedButton] {
+		if (lastCheckedButton)
+			scrollArea->ensureWidgetVisible(lastCheckedButton);
+	});
 }
 
 void MainWindow::editConfigTxt()
