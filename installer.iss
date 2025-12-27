@@ -2,6 +2,7 @@
 #define MyAppVersion "1.0.0"
 #define MyAppPublisher "VioletGiraffe"
 #define MyAppExeName "EqApoGui.exe"
+#define ShortcutName "Eq APO Profile Selector"
 
 [Setup]
 AppId={#MyAppName}
@@ -35,9 +36,9 @@ Source: "build\deploy\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs 
 Source: "build\vc_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
 
 [Icons]
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
+Name: "{group}\{#ShortcutName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\Eq APO Profile Selector"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+Name: "{autodesktop}\{#ShortcutName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
 Filename: "{tmp}\vc_redist.x64.exe"; Parameters: "/install /quiet /norestart"; StatusMsg: "Installing Visual C++ Runtime..."; Flags: waituntilterminated
