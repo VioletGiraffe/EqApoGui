@@ -49,7 +49,9 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 	groupBoxLayout->addWidget(scrollArea);
 
 	QWidget* scrollContent = new QWidget(scrollArea);
-	scrollLayout = new QVBoxLayout(scrollContent);
+	scrollLayout = new QGridLayout(scrollContent);
+	scrollLayout->setColumnStretch(0, 1);
+	scrollLayout->setColumnStretch(1, 1);
 	scrollLayout->setAlignment(Qt::AlignTop);
 	scrollLayout->setContentsMargins(0, 0, 0, 0);
 	scrollArea->setWidget(scrollContent);
@@ -150,6 +152,20 @@ void MainWindow::loadConfig()
 	for (const auto& profile: _config.profiles())
 	{
 		QRadioButton* profileRadio = new QRadioButton(profile.name, this);
+		connect(profileRadio, &QRadioButton::toggled, [this, profileRadio](bool checked) {
+			QFont f = profileRadio->font();
+			f.setBold(checked);
+			profileRadio->setFont(f);
+
+			if (!checked)
+				return;
+			for (auto* button : profileButtons)
+			{
+				if (button != profileRadio)
+					button->setChecked(false);
+			}
+		});
+
 		if (profile.enabled)
 		{
 			profileRadio->setChecked(true);
@@ -167,16 +183,6 @@ void MainWindow::loadConfig()
 				editFile(name);
 			});
 			contextMenu.exec(profileRadio->mapToGlobal(pos));
-		});
-
-		connect(profileRadio, &QRadioButton::toggled, [this, profileRadio](bool checked) {
-			if (!checked)
-				return;
-			for (auto* button : profileButtons)
-			{
-				if (button != profileRadio)
-					button->setChecked(false);
-			}
 		});
 	}
 
