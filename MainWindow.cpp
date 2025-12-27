@@ -24,7 +24,7 @@
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 {
-	setWindowTitle("Equalizer APO Profile Switcher");
+	setWindowTitle("Equalizer APO Profile Selector");
 	QWidget* centralWidget = new QWidget(this);
 
 	QVBoxLayout* mainLayout = new QVBoxLayout(centralWidget);
