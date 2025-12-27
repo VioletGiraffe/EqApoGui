@@ -8,3 +8,5 @@ A lightweight desktop application for managing Equalizer APO (E-APO) configurati
 - Allows quick adjustment for the global preamp. 
 - Immediately applies changes when you make them.
 - Lets you crate a new EQ profile with a single click.
+
+<img width="512" height="752" alt="image" src="https://github.com/user-attachments/assets/c9c0d8a0-15de-41cd-8e40-f4a60ec6268a" />
