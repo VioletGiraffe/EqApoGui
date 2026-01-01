@@ -1,12 +1,12 @@
 # Equalizer APO Profile Manager
 
-A lightweight desktop application for managing Equalizer APO (E-APO) configurations. It complements the official **Equalizer APO Configurator** by providing fast profile switching, streamlined profile creation, and a clear overview of all active configuration files. It does **not** replace the official GUI; both can be used side-by-side.
+A lightweight desktop application for managing Equalizer APO (E-APO) configuration. It complements the official **Equalizer APO Configurator** by providing fast profile switching, streamlined profile creation, and a clear overview of all available configuration files. It does **not** replace the official GUI; both can be used side-by-side.
 
 ## Features
 - Displays all profiles included in the current E-APO config (config.txt file).
 - Allows enabling exactly one profile and switching between them in a single click.
 - Allows quick adjustment for the global preamp. 
 - Immediately applies changes when you make them.
-- Lets you crate a new EQ profile with a single click.
+- Lets you create a new EQ profile with a single click.
 
 <img width="512" height="752" alt="image" src="https://github.com/user-attachments/assets/c9c0d8a0-15de-41cd-8e40-f4a60ec6268a" />
