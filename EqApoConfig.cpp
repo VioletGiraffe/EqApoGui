@@ -106,7 +106,7 @@ std::expected<QString, QString> EqApoConfig::createNewProfile(const QString& nam
 		if (!tryOpenFile(cfg, QIODevice::Append | QIODevice::Text))
 			return std::unexpected("Failed to open config.txt for appending: " + cfg.errorString());
 
-		const QString includeLine = QString("#Include: %1\n").arg(fileName);
+		const QString includeLine = QString("#Include: %1\r\n").arg(fileName);
 
 		const bool includeExists = std::find_if(_profiles.begin(), _profiles.end(), [&](const EqProfile& item) -> bool { return item.name.compare(name, Qt::CaseInsensitive) == 0; }) != _profiles.end();
 		if (includeExists)
@@ -137,7 +137,7 @@ std::expected<void, QString> EqApoConfig::saveState() noexcept
 	if (!tryOpenFile(configFile, QFile::WriteOnly))
 		return std::unexpected("Failed to open config for writing: " + configFile.errorString());
 
-	QString preampLine = QString("Preamp: %1 dB\n").arg(_preampState.gain, 0, 'f', 1);
+	QString preampLine = QString("Preamp: %1 dB\r\n").arg(_preampState.gain, 0, 'f', 1);
 	if (!_preampState.enabled)
 		preampLine.prepend("#"); // Comment out if disabled
 	configFile.write(preampLine.toLatin1());
@@ -145,7 +145,7 @@ std::expected<void, QString> EqApoConfig::saveState() noexcept
 	// Profiles
 	for (const EqProfile& profile: std::as_const(_profiles))
 	{
-		QString line = "Include: " + profile.name + "\n";
+		QString line = "Include: " + profile.name + "\r\n";
 		if (!profile.enabled)
 			line.prepend('#');
 
