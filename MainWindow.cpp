@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include "version.h"
 
 #include <QAction>
 #include <QButtonGroup>
@@ -9,6 +10,9 @@
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QInputDialog>
+#include <QKeySequence>
+#include <QLabel>
+#include <QLineEdit>
 #include <QMainWindow>
 #include <QMenu>
 #include <QMessageBox>
@@ -18,13 +22,14 @@
 #include <QScreen>
 #include <QScrollArea>
 #include <QScrollBar>
+#include <QShortcut>
 #include <QStringList>
 #include <QTimer>
 #include <QVBoxLayout>
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 {
-	setWindowTitle("Equalizer APO Profile Selector");
+	setWindowTitle(QString{"Equalizer APO Profile Selector v"} + VersionString);
 	QWidget* centralWidget = new QWidget(this);
 
 	QVBoxLayout* mainLayout = new QVBoxLayout(centralWidget);
@@ -42,6 +47,24 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 	// Profiles section
 	QGroupBox* profilesGroupBox = new QGroupBox("EQ Profiles", this);
 	QVBoxLayout* groupBoxLayout = new QVBoxLayout(profilesGroupBox);
+
+	// Search widget (initially hidden)
+	searchWidget = new QWidget(profilesGroupBox);
+	QHBoxLayout* searchLayout = new QHBoxLayout(searchWidget);
+	searchLayout->setContentsMargins(0, 0, 0, 0);
+
+	searchEdit = new QLineEdit(searchWidget);
+	searchEdit->setPlaceholderText("Search profiles... (Ctrl+F to focus, Esc to clear)");
+	searchEdit->setClearButtonEnabled(true);
+	searchLayout->addWidget(searchEdit);
+
+	searchResultLabel = new QLabel(searchWidget);
+	searchResultLabel->setStyleSheet("color: gray;");
+	searchLayout->addWidget(searchResultLabel);
+
+	searchWidget->setVisible(false);
+	groupBoxLayout->addWidget(searchWidget);
+
 	scrollArea = new QScrollArea(profilesGroupBox);
 	scrollArea->setWidgetResizable(true);  // Automatically resizes viewport widget to fit contents
 	scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -90,6 +113,20 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 	connect(preampCheck, &QCheckBox::toggled, this, &MainWindow::applyChanges);
 	connect(preampCheck, &QCheckBox::toggled, preampSpin, &QDoubleSpinBox::setEnabled);
 	connect(preampSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &MainWindow::applyChanges);
+
+	// Search functionality
+	connect(searchEdit, &QLineEdit::textChanged, this, &MainWindow::filterProfiles);
+
+	// Ctrl+F to focus search
+	QShortcut* searchShortcut = new QShortcut(QKeySequence::Find, this);
+	connect(searchShortcut, &QShortcut::activated, this, &MainWindow::focusSearch);
+
+	// Escape to clear search and hide search widget
+	QShortcut* escapeShortcut = new QShortcut(QKeySequence(Qt::Key_Escape), searchEdit);
+	connect(escapeShortcut, &QShortcut::activated, this, [this] {
+		searchEdit->clear();
+		searchWidget->setVisible(false);
+	});
 
 	// Set the window height to half of the screen height or 600, whichever is smaller
 	const int screenHeight = screen() ? screen()->size().height() : 720;
@@ -208,4 +245,42 @@ void MainWindow::editFile(QString fileName)
 		fileName = _config.configFolder() + '/' + fileName;
 
 	QProcess::startDetached("notepad.exe", { fileName });
+}
+
+void MainWindow::filterProfiles(const QString& searchText)
+{
+	if (searchText.isEmpty())
+	{
+		// Show all profiles
+		for (auto* btn : profileButtons)
+			btn->setVisible(true);
+		searchResultLabel->clear();
+		return;
+	}
+
+	const QString lowerSearch = searchText.toLower().remove(' ');
+	size_t visibleCount = 0;
+
+	for (auto* btn : profileButtons)
+	{
+		const bool matches = btn->text().toLower().remove(' ').contains(lowerSearch);
+		btn->setVisible(matches);
+		if (matches)
+			++visibleCount;
+	}
+
+	// Update result label
+	if (visibleCount == 0)
+		searchResultLabel->setText("No matches");
+	else if (visibleCount == profileButtons.size())
+		searchResultLabel->setText(QString("All %1 profiles").arg(visibleCount));
+	else
+		searchResultLabel->setText(QString("%1 of %2").arg(visibleCount).arg(profileButtons.size()));
+}
+
+void MainWindow::focusSearch()
+{
+	searchWidget->setVisible(true);
+	searchEdit->setFocus();
+	searchEdit->selectAll();
 }

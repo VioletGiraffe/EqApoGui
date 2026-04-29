@@ -9,8 +9,11 @@ class QButtonGroup;
 class QCheckBox;
 class QDoubleSpinBox;
 class QGridLayout;
+class QLabel;
+class QLineEdit;
 class QRadioButton;
 class QScrollArea;
+class QWidget;
 
 class MainWindow final : public QMainWindow {
 public:
@@ -22,6 +25,8 @@ private:
 	void loadConfig();
 	void editConfigTxt();
 	void editFile(QString fileName);
+	void filterProfiles(const QString& searchText);
+	void focusSearch();
 
 private:
 	EqApoConfig _config;
@@ -33,4 +38,8 @@ private:
 	QButtonGroup* profileButtonGroup = nullptr;
 	QGridLayout* scrollLayout = nullptr;
 	QScrollArea* scrollArea = nullptr;
+
+	QWidget* searchWidget = nullptr;
+	QLineEdit* searchEdit = nullptr;
+	QLabel* searchResultLabel = nullptr;
 };

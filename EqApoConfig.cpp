@@ -89,7 +89,7 @@ std::expected<QString, QString> EqApoConfig::createNewProfile(const QString& nam
 	if (!fileName.endsWith(".txt", Qt::CaseInsensitive))
 		fileName += ".txt";
 
-	const QString filePath = configFolder() + "/" + fileName;
+	QString filePath = configFolder() + "/" + fileName;
 
 	{
 		QFile file(filePath);

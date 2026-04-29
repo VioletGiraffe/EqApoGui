@@ -14,4 +14,5 @@ SOURCES += \
 
 HEADERS += \
 	EqApoConfig.h \
-	MainWindow.h
+	MainWindow.h \
+	version.h
