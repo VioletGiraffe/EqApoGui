@@ -2,7 +2,6 @@
 #include "FrequencyResponse.h"
 
 #include <QPainter>
-#include <QPainterPath>
 #include <QPen>
 
 #include <cmath>
@@ -10,12 +9,12 @@
 // Display ranges
 inline constexpr double MIN_DB = -12.0;
 inline constexpr double MAX_DB = 12.0;
+inline constexpr int Margin = 50;
 
 // Generate logarithmically-spaced frequencies from 20 Hz to 20 kHz
-inline std::vector<double> generateLogFrequencies(size_t numPoints)
+inline void generateLogFrequencies(std::vector<double>& frequencies, size_t numPoints)
 {
-	std::vector<double> frequencies;
-	frequencies.reserve(numPoints);
+	frequencies.resize(numPoints);
 
 	const double minFreq = 15.0;
 	const double maxFreq = 20000.0;
@@ -25,16 +24,18 @@ inline std::vector<double> generateLogFrequencies(size_t numPoints)
 	for (size_t i = 0; i < numPoints; ++i)
 	{
 		double logFreq = logMin + (logMax - logMin) * i / (numPoints - 1);
-		frequencies.push_back(std::pow(10.0, logFreq));
+		frequencies[i] = std::pow(10.0, logFreq);
 	}
-
-	return frequencies;
 }
 
+inline double dbToY(double db)
+{
+	// Linear scale, inverted (0 dB at center, positive up, negative down)
+	return 1.0 - (db - MIN_DB) / (MAX_DB - MIN_DB);
+}
 
 FrequencyResponseWidget::FrequencyResponseWidget(QWidget* parent) :
-	QWidget(parent),
-	_frequencies{ generateLogFrequencies(1000) }
+	QWidget(parent)
 {
 	setMinimumHeight(200);
 	setSizePolicy(QSizePolicy::Expanding, QSizePolicy::MinimumExpanding);
@@ -68,6 +69,14 @@ void FrequencyResponseWidget::paintEvent(QPaintEvent* /*event*/)
 
 	// Fill background
 	painter.fillRect(rect(), Qt::white);
+
+	const auto canvasWidth = width() - 2 * Margin;
+
+	if (canvasWidth != _frequencies.size())
+	{
+		generateLogFrequencies(_frequencies, canvasWidth);
+		updateResponse();
+	}
 
 	drawGrid(painter);
 	drawResponse(painter);
@@ -132,44 +141,35 @@ void FrequencyResponseWidget::drawGrid(QPainter& painter)
 	}
 }
 
-void FrequencyResponseWidget::drawResponse(QPainter& painter)
+void FrequencyResponseWidget::drawResponse(QPainter& p)
 {
 	if (_response.empty())
 		return;
 
-	const int margin = 50;
-	const int graphWidth = width() - 2 * margin;
-	const int graphHeight = height() - 2 * margin;
+	const double graphWidth = static_cast<double>(width() - 2 * Margin);
+	const double graphHeight = static_cast<double>(height() - 2 * Margin);
 
 	// Draw the frequency response curve
-	painter.setPen(QPen(QColor(0, 120, 215), 2));  // Blue curve
+	p.setPen(QPen(QColor(0, 120, 215), 2));  // Blue curve
 
-	QPainterPath path;
-	bool firstPoint = true;
+	std::vector<QPointF> points;
+	points.reserve(_frequencies.size());
 
-	for (size_t i = 0; i < _frequencies.size(); ++i)
+	for (size_t i = 0, n = _frequencies.size(); i < n; ++i)
 	{
-		double freq = _frequencies[i];
+		const double freq = _frequencies[i];
 		double db = _response[i];
 
 		// Clamp to visible range
 		db = std::max(MIN_DB, std::min(MAX_DB, db));
 
-		int x = margin + static_cast<int>(freqToX(freq) * graphWidth);
-		int y = margin + static_cast<int>(dbToY(db) * graphHeight);
+		const double x = (double)Margin + freqToX(freq) * graphWidth;
+		const double y = (double)Margin + dbToY(db) * graphHeight;
 
-		if (firstPoint)
-		{
-			path.moveTo(x, y);
-			firstPoint = false;
-		}
-		else
-		{
-			path.lineTo(x, y);
-		}
+		points.emplace_back(x, y);
 	}
 
-	painter.drawPath(path);
+	p.drawPolyline(points.data(), (int)points.size());
 }
 
 double FrequencyResponseWidget::freqToX(double freq) const
@@ -179,10 +179,4 @@ double FrequencyResponseWidget::freqToX(double freq) const
 	double logMax = std::log10(_frequencies.back());
 	double logFreq = std::log10(freq);
 	return (logFreq - logMin) / (logMax - logMin);
-}
-
-double FrequencyResponseWidget::dbToY(double db) const
-{
-	// Linear scale, inverted (0 dB at center, positive up, negative down)
-	return 1.0 - (db - MIN_DB) / (MAX_DB - MIN_DB);
 }

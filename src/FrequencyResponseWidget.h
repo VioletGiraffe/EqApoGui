@@ -19,10 +19,9 @@ private:
 	void drawGrid(QPainter& painter);
 	void drawResponse(QPainter& painter);
 	double freqToX(double freq) const;
-	double dbToY(double db) const;
 
 private:
-	const std::vector<double> _frequencies;
+	std::vector<double> _frequencies;
 	std::vector<double> _response;
 	const std::vector<FilterUniquePtr>* _filters = nullptr;
 };
