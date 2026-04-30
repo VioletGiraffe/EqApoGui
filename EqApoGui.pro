@@ -8,11 +8,11 @@ msvc*{
 }
 
 SOURCES += \
-	EqApoConfig.cpp \
-	MainWindow.cpp \
-	main.cpp
+	src/EqApoConfig.cpp \
+	src/MainWindow.cpp \
+	src/main.cpp
 
 HEADERS += \
-	EqApoConfig.h \
-	MainWindow.h \
-	version.h
+	src/EqApoConfig.h \
+	src/MainWindow.h \
+	src/version.h
