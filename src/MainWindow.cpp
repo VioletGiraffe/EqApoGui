@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include "ProfileEditorWindow.h"
 #include "version.h"
 
 #include <QAction>
@@ -52,16 +53,16 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 	searchWidget = new QWidget(profilesGroupBox);
 	QHBoxLayout* searchLayout = new QHBoxLayout(searchWidget);
 	searchLayout->setContentsMargins(0, 0, 0, 0);
-
+	
 	searchEdit = new QLineEdit(searchWidget);
 	searchEdit->setPlaceholderText("Search profiles... (Ctrl+F to focus, Esc to clear)");
 	searchEdit->setClearButtonEnabled(true);
 	searchLayout->addWidget(searchEdit);
-
+	
 	searchResultLabel = new QLabel(searchWidget);
 	searchResultLabel->setStyleSheet("color: gray;");
 	searchLayout->addWidget(searchResultLabel);
-
+	
 	searchWidget->setVisible(false);
 	groupBoxLayout->addWidget(searchWidget);
 
@@ -116,11 +117,11 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 
 	// Search functionality
 	connect(searchEdit, &QLineEdit::textChanged, this, &MainWindow::filterProfiles);
-
+	
 	// Ctrl+F to focus search
 	QShortcut* searchShortcut = new QShortcut(QKeySequence::Find, this);
 	connect(searchShortcut, &QShortcut::activated, this, &MainWindow::focusSearch);
-
+	
 	// Escape to clear search and hide search widget
 	QShortcut* escapeShortcut = new QShortcut(QKeySequence(Qt::Key_Escape), searchEdit);
 	connect(escapeShortcut, &QShortcut::activated, this, [this] {
@@ -215,10 +216,22 @@ void MainWindow::loadConfig()
 		profileRadio->setContextMenuPolicy(Qt::CustomContextMenu);
 		connect(profileRadio, &QWidget::customContextMenuRequested, this, [this, profileRadio, name{ profile.name }](QPoint pos) {
 			QMenu contextMenu(this);
+			
+			QAction* editProfileAction = contextMenu.addAction("Edit Profile...");
+			connect(editProfileAction, &QAction::triggered, [this, name]() {
+				const QString filePath = _config.configFolder() + "/" + name;
+				auto* editorWindow = new ProfileEditorWindow(filePath, this);
+				editorWindow->setAttribute(Qt::WA_DeleteOnClose);
+				editorWindow->setWindowModality(Qt::ApplicationModal);
+				editorWindow->resize(800, 600);
+				editorWindow->show();
+			});
+			
 			QAction* openAction = contextMenu.addAction("Open in Notepad");
 			connect(openAction, &QAction::triggered, [this, name]() {
 				editFile(name);
 			});
+			
 			contextMenu.exec(profileRadio->mapToGlobal(pos));
 		});
 	}
