@@ -130,14 +130,21 @@ void FrequencyResponseWidget::drawGrid(QPainter& painter)
 	}
 
 	// Draw vertical grid lines (frequency)
-	const std::array freqMarkers{ _frequencies.front(), 25.0, 50.0, 100.0, 200.0, 500.0, 1e3, 2e3, 5e3, 10e3, _frequencies.back() };
+	const std::array freqMarkers{
+		(int)_frequencies.front(),
+		20, 30, 40, 60, 80,
+		100, 200, 300, 400, 600, 800,
+		1000, 2000, 3000, 4000, 5000, 7000,
+		10000, 14000,
+		(int)_frequencies.back()
+	};
 
 	QFontMetrics fm(font);
 	const int labelHeight = fm.height();
 
 	for (size_t i = 0; i < freqMarkers.size(); ++i)
 	{
-		const double freq = freqMarkers[i];
+		const int freq = freqMarkers[i];
 		int x = MarginLeft + static_cast<int>(freqToX(freq) * graphWidth);
 		painter.setPen(QPen(Qt::lightGray, 1));
 		painter.drawLine(x, MarginTop, x, MarginTop + graphHeight);
@@ -145,8 +152,10 @@ void FrequencyResponseWidget::drawGrid(QPainter& painter)
 		// Draw label
 		painter.setPen(Qt::black);
 		QString label;
-		if (freq >= 1000)
-			label = QString("%1k").arg(freq / 1000, 0, 'f', freq == 1000 ? 0 : 1);
+		if (freq >= 1000 && (freq % 1000 == 0))
+			label = QString("%1k").arg(freq / 1000);
+		else if (freq >= 1000 && (freq % 1000 != 0))
+			label = QString("%1k").arg((float)freq / 1000.0f, 0, 'f', 1);
 		else
 			label = QString::number(static_cast<int>(freq));
 
