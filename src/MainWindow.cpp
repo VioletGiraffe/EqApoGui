@@ -189,7 +189,10 @@ void MainWindow::loadConfig()
 
 	for (const auto& profile: _config.profiles())
 	{
-		QRadioButton* profileRadio = new QRadioButton(profile.name, this);
+		QString name = profile.name;
+		if (name.endsWith(".txt", Qt::CaseInsensitive))
+			name.chop(4);
+		QRadioButton* profileRadio = new QRadioButton(name, this);
 		connect(profileRadio, &QRadioButton::toggled, [this, profileRadio](bool checked) {
 			QFont f = profileRadio->font();
 			f.setBold(checked);

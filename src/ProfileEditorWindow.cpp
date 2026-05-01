@@ -10,6 +10,7 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QShortcut>
 #include <QSplitter>
 #include <QVBoxLayout>
 
@@ -81,6 +82,10 @@ ProfileEditorWindow::ProfileEditorWindow(const QString& profilePath, QWidget* pa
 
 	mainLayout->addLayout(buttonLayout);
 	setCentralWidget(central);
+
+	// Close on Escape key
+	QShortcut* escShortcut = new QShortcut(QKeySequence(Qt::Key_Escape), this, nullptr, nullptr, Qt::WindowShortcut);
+	connect(escShortcut, &QShortcut::activated, this, &ProfileEditorWindow::close);
 
 	loadProfile();
 }
