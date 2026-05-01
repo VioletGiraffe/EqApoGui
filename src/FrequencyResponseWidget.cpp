@@ -7,7 +7,7 @@
 #include <array>
 #include <cmath>
 
-inline constexpr int MarginLeft = 50;
+inline constexpr int MarginLeft = 40;
 inline constexpr int MarginRight = 5;
 inline constexpr int MarginTop = 5;
 inline constexpr int MarginBottom = 25;
@@ -111,10 +111,12 @@ void FrequencyResponseWidget::drawGrid(QPainter& painter)
 	QFont font = painter.font();
 	font.setPointSize(9);
 	painter.setFont(font);
+	QFontMetrics fm(font);
+	const int labelHeight = fm.height();
 
 	for (double db = _minDb; db <= _maxDb; db += 3.0)
 	{
-		int y = MarginTop + static_cast<int>(dbToY(db, _minDb, _maxDb) * graphHeight);
+		const int y = MarginTop + static_cast<int>(dbToY(db, _minDb, _maxDb) * graphHeight);
 
 		if (std::abs(db) < 0.1)  // Zero line
 			painter.setPen(QPen(Qt::gray, 1, Qt::DashLine));
@@ -125,8 +127,14 @@ void FrequencyResponseWidget::drawGrid(QPainter& painter)
 
 		// Draw label
 		painter.setPen(Qt::black);
-		QString label = QString("%1").arg(db, 0, 'f', 0);
-		painter.drawText(5, y + 5, label + " dB");
+		QString label = QString("%1 dB").arg(db, 0, 'f', 0);
+
+		if (db == _maxDb)
+			painter.drawText(5, labelHeight + 1, label);
+		else if (db == _minDb)
+			painter.drawText(5, height() - MarginBottom - 1, label);
+		else
+			painter.drawText(5, y + 5, label);
 	}
 
 	// Draw vertical grid lines (frequency)
@@ -138,9 +146,6 @@ void FrequencyResponseWidget::drawGrid(QPainter& painter)
 		10000, 14000,
 		(int)_frequencies.back()
 	};
-
-	QFontMetrics fm(font);
-	const int labelHeight = fm.height();
 
 	for (size_t i = 0; i < freqMarkers.size(); ++i)
 	{
