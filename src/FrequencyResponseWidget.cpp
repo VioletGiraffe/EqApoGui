@@ -4,6 +4,7 @@
 #include <QPainter>
 #include <QPen>
 
+#include <array>
 #include <cmath>
 
 // Display ranges
@@ -113,11 +114,13 @@ void FrequencyResponseWidget::drawGrid(QPainter& painter)
 		painter.setPen(Qt::black);
 		QString label = QString("%1").arg(db, 0, 'f', 0);
 		painter.drawText(5, y + 5, label + " dB");
-		painter.setPen(QPen(Qt::lightGray, 1));
 	}
 
 	// Draw vertical grid lines (frequency)
-	const std::vector<double> freqMarkers{_frequencies.front(), 25, 50.0, 100.0, 200.0, 500.0, 1e3, 2e3, 5e3, 10e3, _frequencies.back()};
+	const std::array freqMarkers{_frequencies.front(), 25.0, 50.0, 100.0, 200.0, 500.0, 1e3, 2e3, 5e3, 10e3, _frequencies.back()};
+
+	QFontMetrics fm(font);
+	const int labelHeight = fm.height();
 
 	for (double freq : freqMarkers)
 	{
@@ -133,11 +136,7 @@ void FrequencyResponseWidget::drawGrid(QPainter& painter)
 		else
 			label = QString::number(static_cast<int>(freq));
 
-		painter.save();
-		painter.translate(x, height() - 10);
-		painter.rotate(-45);
-		painter.drawText(0, 0, label);
-		painter.restore();
+		painter.drawText(x - fm.horizontalAdvance(label) / 2, margin + graphHeight + labelHeight, label);
 	}
 }
 
