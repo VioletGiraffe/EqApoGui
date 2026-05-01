@@ -7,9 +7,6 @@
 #include <array>
 #include <cmath>
 
-// Display ranges
-inline constexpr double MIN_DB = -12.0;
-inline constexpr double MAX_DB = 12.0;
 inline constexpr int Margin = 50;
 
 // Generate logarithmically-spaced frequencies from 20 Hz to 20 kHz
@@ -29,10 +26,10 @@ inline void generateLogFrequencies(std::vector<double>& frequencies, size_t numP
 	}
 }
 
-inline double dbToY(double db)
+inline double dbToY(double db, double minDb, double maxDb)
 {
 	// Linear scale, inverted (0 dB at center, positive up, negative down)
-	return 1.0 - (db - MIN_DB) / (MAX_DB - MIN_DB);
+	return 1.0 - (db - minDb) / (maxDb - minDb);
 }
 
 FrequencyResponseWidget::FrequencyResponseWidget(QWidget* parent) :
@@ -47,19 +44,33 @@ FrequencyResponseWidget::FrequencyResponseWidget(QWidget* parent) :
 void FrequencyResponseWidget::setFilters(const std::vector<FilterUniquePtr>& filters)
 {
 	_filters = &filters;
-	updateResponse();
+
+	_response.clear();
+	_frequencies.clear(); // Will be regenerated in paintEvent
+
+	update();
 }
 
 void FrequencyResponseWidget::updateResponse()
 {
+	assert(_frequencies.size() > 1);
+
 	if (!_filters)
 	{
 		std::fill(_response.begin(), _response.end(), 0.0);
+		_minDb = -12.0;
+		_maxDb = 12.0;
 		update();
 		return;
 	}
 
 	_response = calculateFrequencyResponse(*_filters, _frequencies);
+
+	// Calculate dynamic min and max dB values
+	auto [minIt, maxIt] = std::minmax_element(_response.begin(), _response.end());
+	_minDb = std::floor(*minIt);
+	_maxDb = std::ceil(*maxIt);
+
 	update();
 }
 
@@ -99,9 +110,9 @@ void FrequencyResponseWidget::drawGrid(QPainter& painter)
 	font.setPointSize(9);
 	painter.setFont(font);
 
-	for (double db = MIN_DB; db <= MAX_DB; db += 3.0)
+	for (double db = _minDb; db <= _maxDb; db += 3.0)
 	{
-		int y = margin + static_cast<int>(dbToY(db) * graphHeight);
+		int y = margin + static_cast<int>(dbToY(db, _minDb, _maxDb) * graphHeight);
 
 		if (std::abs(db) < 0.1)  // Zero line
 			painter.setPen(QPen(Qt::gray, 1, Qt::DashLine));
@@ -117,7 +128,7 @@ void FrequencyResponseWidget::drawGrid(QPainter& painter)
 	}
 
 	// Draw vertical grid lines (frequency)
-	const std::array freqMarkers{_frequencies.front(), 25.0, 50.0, 100.0, 200.0, 500.0, 1e3, 2e3, 5e3, 10e3, _frequencies.back()};
+	const std::array freqMarkers{ _frequencies.front(), 25.0, 50.0, 100.0, 200.0, 500.0, 1e3, 2e3, 5e3, 10e3, _frequencies.back() };
 
 	QFontMetrics fm(font);
 	const int labelHeight = fm.height();
@@ -160,10 +171,10 @@ void FrequencyResponseWidget::drawResponse(QPainter& p)
 		double db = _response[i];
 
 		// Clamp to visible range
-		db = std::max(MIN_DB, std::min(MAX_DB, db));
+		db = std::max(_minDb, std::min(_maxDb, db));
 
 		const double x = (double)Margin + freqToX(freq) * graphWidth;
-		const double y = (double)Margin + dbToY(db) * graphHeight;
+		const double y = (double)Margin + dbToY(db, _minDb, _maxDb) * graphHeight;
 
 		points.emplace_back(x, y);
 	}

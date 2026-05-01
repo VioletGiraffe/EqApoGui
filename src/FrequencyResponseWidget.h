@@ -24,4 +24,7 @@ private:
 	std::vector<double> _frequencies;
 	std::vector<double> _response;
 	const std::vector<FilterUniquePtr>* _filters = nullptr;
+
+	double _minDb = -12.0;
+	double _maxDb = 12.0;
 };
