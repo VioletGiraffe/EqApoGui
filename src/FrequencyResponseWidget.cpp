@@ -7,7 +7,10 @@
 #include <array>
 #include <cmath>
 
-inline constexpr int Margin = 50;
+inline constexpr int MarginLeft = 50;
+inline constexpr int MarginRight = 5;
+inline constexpr int MarginTop = 5;
+inline constexpr int MarginBottom = 25;
 
 // Generate logarithmically-spaced frequencies from 20 Hz to 20 kHz
 inline void generateLogFrequencies(std::vector<double>& frequencies, size_t numPoints)
@@ -82,7 +85,7 @@ void FrequencyResponseWidget::paintEvent(QPaintEvent* /*event*/)
 	// Fill background
 	painter.fillRect(rect(), Qt::white);
 
-	const auto canvasWidth = width() - 2 * Margin;
+	const auto canvasWidth = width() - MarginLeft - MarginRight;
 
 	if (canvasWidth != _frequencies.size())
 	{
@@ -96,13 +99,12 @@ void FrequencyResponseWidget::paintEvent(QPaintEvent* /*event*/)
 
 void FrequencyResponseWidget::drawGrid(QPainter& painter)
 {
-	const int margin = 50;
-	const int graphWidth = width() - 2 * margin;
-	const int graphHeight = height() - 2 * margin;
+	const int graphWidth = width() - MarginLeft - MarginRight;
+	const int graphHeight = height() - MarginTop - MarginBottom;
 
 	// Draw border
 	painter.setPen(QPen(Qt::black, 2));
-	painter.drawRect(margin, margin, graphWidth, graphHeight);
+	painter.drawRect(MarginLeft, MarginTop, graphWidth, graphHeight);
 
 	// Draw horizontal grid lines (dB)
 	painter.setPen(QPen(Qt::lightGray, 1));
@@ -112,14 +114,14 @@ void FrequencyResponseWidget::drawGrid(QPainter& painter)
 
 	for (double db = _minDb; db <= _maxDb; db += 3.0)
 	{
-		int y = margin + static_cast<int>(dbToY(db, _minDb, _maxDb) * graphHeight);
+		int y = MarginTop + static_cast<int>(dbToY(db, _minDb, _maxDb) * graphHeight);
 
 		if (std::abs(db) < 0.1)  // Zero line
 			painter.setPen(QPen(Qt::gray, 1, Qt::DashLine));
 		else
 			painter.setPen(QPen(Qt::lightGray, 1));
 
-		painter.drawLine(margin, y, margin + graphWidth, y);
+		painter.drawLine(MarginLeft, y, MarginLeft + graphWidth, y);
 
 		// Draw label
 		painter.setPen(Qt::black);
@@ -133,11 +135,12 @@ void FrequencyResponseWidget::drawGrid(QPainter& painter)
 	QFontMetrics fm(font);
 	const int labelHeight = fm.height();
 
-	for (double freq : freqMarkers)
+	for (size_t i = 0; i < freqMarkers.size(); ++i)
 	{
-		int x = margin + static_cast<int>(freqToX(freq) * graphWidth);
+		const double freq = freqMarkers[i];
+		int x = MarginLeft + static_cast<int>(freqToX(freq) * graphWidth);
 		painter.setPen(QPen(Qt::lightGray, 1));
-		painter.drawLine(x, margin, x, margin + graphHeight);
+		painter.drawLine(x, MarginTop, x, MarginTop + graphHeight);
 
 		// Draw label
 		painter.setPen(Qt::black);
@@ -147,7 +150,10 @@ void FrequencyResponseWidget::drawGrid(QPainter& painter)
 		else
 			label = QString::number(static_cast<int>(freq));
 
-		painter.drawText(x - fm.horizontalAdvance(label) / 2, margin + graphHeight + labelHeight, label);
+		if (i == freqMarkers.size() - 1) // The last marker is offset to the left so it's not cut off by the right edge
+			painter.drawText(x - fm.horizontalAdvance(label), MarginTop + graphHeight + labelHeight, label);
+		else
+			painter.drawText(x - fm.horizontalAdvance(label) / 2, MarginTop + graphHeight + labelHeight, label);
 	}
 }
 
@@ -156,8 +162,8 @@ void FrequencyResponseWidget::drawResponse(QPainter& p)
 	if (_response.empty())
 		return;
 
-	const double graphWidth = static_cast<double>(width() - 2 * Margin);
-	const double graphHeight = static_cast<double>(height() - 2 * Margin);
+	const double graphWidth = static_cast<double>(width() - MarginLeft - MarginRight);
+	const double graphHeight = static_cast<double>(height() - MarginTop - MarginBottom);
 
 	// Draw the frequency response curve
 	p.setPen(QPen(QColor(0, 120, 215), 2));  // Blue curve
@@ -173,8 +179,8 @@ void FrequencyResponseWidget::drawResponse(QPainter& p)
 		// Clamp to visible range
 		db = std::max(_minDb, std::min(_maxDb, db));
 
-		const double x = (double)Margin + freqToX(freq) * graphWidth;
-		const double y = (double)Margin + dbToY(db, _minDb, _maxDb) * graphHeight;
+		const double x = (double)MarginLeft + freqToX(freq) * graphWidth;
+		const double y = (double)MarginTop + dbToY(db, _minDb, _maxDb) * graphHeight;
 
 		points.emplace_back(x, y);
 	}
