@@ -47,20 +47,6 @@ if exist "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\B
 	set "VCVARSALL=C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat"
 )
 
-if "%VCVARSALL%"=="" (
-	echo ERROR: Could not find vcvarsall.bat for Visual Studio 2022
-	cd ..
-	exit /b 1
-)
-
-echo Found: %VCVARSALL%
-call "%VCVARSALL%" x64
-if errorlevel 1 (
-	echo ERROR: vcvarsall.bat failed
-	cd ..
-	exit /b 1
-)
-
 echo.
 echo ========================================
 echo Running qmake...
