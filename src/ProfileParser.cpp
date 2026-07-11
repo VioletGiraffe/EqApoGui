@@ -64,22 +64,26 @@ std::expected<FilterUniquePtr, QString> ProfileParser::parseLine(const QString& 
 		return std::make_unique<PreampFilter>(gain, !isCommented);
 	}
 
-	// Parse Filter lines
-	if (cleanLine.startsWith("Filter ", Qt::CaseInsensitive))
+	// Parse Filter lines: both "Filter:" and the numbered "Filter 1:" form
+	if (cleanLine.startsWith("Filter", Qt::CaseInsensitive))
 	{
 		// Check if it's ON or OFF
 		bool enabled = cleanLine.contains(" ON ", Qt::CaseInsensitive);
 		bool disabled = cleanLine.contains(" OFF ", Qt::CaseInsensitive);
-		
+
 		if (!enabled && !disabled)
 			return std::unexpected("Filter line missing ON/OFF: " + line);
+
+		// A commented-out line is disabled regardless of its ON/OFF token (saveProfile disables by commenting out)
+		if (isCommented)
+			enabled = false;
 
 		// Check filter type
 		if (cleanLine.contains(" PK ", Qt::CaseInsensitive))
 		{
 			// Parse peaking filter: Filter: ON PK Fc 160.7 Hz Gain -2 dB Q 3.92
 			QRegularExpression re(
-				R"(Filter [0-9]*:\s*(ON|OFF)\s+PK\s+Fc\s+([-+]?\d+\.?\d*)\s*Hz\s+Gain\s+([-+]?\d+\.?\d*)\s*dB\s+Q\s+([-+]?\d+\.?\d*))",
+				R"(Filter\s*[0-9]*:\s*(ON|OFF)\s+PK\s+Fc\s+([-+]?\d+\.?\d*)\s*Hz\s+Gain\s+([-+]?\d+\.?\d*)\s*dB\s+Q\s+([-+]?\d+\.?\d*))",
 				QRegularExpression::CaseInsensitiveOption
 			);
 			auto match = re.match(cleanLine);
