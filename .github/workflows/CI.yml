@@ -39,12 +39,15 @@ jobs:
       run: |
         build_installer.bat
 
-    - name: LOC count - app
+    - name: Install cloc
       shell: pwsh
       run: |
         winget install --id AlDanial.Cloc --exact --silent --accept-package-agreements --accept-source-agreements
         "$env:LOCALAPPDATA\Microsoft\WinGet\Links" >> $env:GITHUB_PATH
 
+    - name: LOC count - app
+      shell: pwsh
+      run: |
         $result = cloc --include-lang="C,C++,C/C++ Header" --strip-str-comments `--exclude-dir=tests,bin,build,.git,3rdparty ` --by-file --json --quiet ./src/ | ConvertFrom-Json
 
         $loc = $result.SUM.code
