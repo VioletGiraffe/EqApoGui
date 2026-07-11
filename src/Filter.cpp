@@ -27,6 +27,16 @@ QString PeakingFilter::displayName() const
 		.arg(_q, 0, 'f', 2);
 }
 
+QString CommentLine::toConfigLine() const
+{
+	return _text;
+}
+
+QString CommentLine::displayName() const
+{
+	return "# " + _text;
+}
+
 QString UnsupportedFilter::toConfigLine() const
 {
 	return _originalLine;

@@ -130,6 +130,17 @@ void ProfileEditorWindow::createFilterWidget(QVBoxLayout* layout, IFilter* filte
 	boxLayout->setContentsMargins(0, 1, 0, 1);
 	boxLayout->setSpacing(6);
 
+	// Comment lines are read-only text, no enable checkbox
+	if (auto* comment = dynamic_cast<CommentLine*>(filter))
+	{
+		QLabel* label = new QLabel(comment->displayName(), filterBox);
+		label->setStyleSheet("color: gray;");
+		boxLayout->addWidget(label);
+		boxLayout->addStretch();
+		layout->addWidget(filterBox);
+		return;
+	}
+
 	// Enable checkbox
 	QCheckBox* enableCheck = new QCheckBox(filterBox);
 	enableCheck->setChecked(filter->isEnabled());

@@ -76,4 +76,18 @@ private:
 	bool _enabled;
 };
 
+// Comment line (preserved verbatim, never enabled; saveProfile re-adds the '#' prefix)
+class CommentLine final : public IFilter {
+public:
+	explicit CommentLine(const QString& text) : _text(text) {}
+
+	QString toConfigLine() const override;
+	QString displayName() const override;
+	bool isEnabled() const override { return false; }
+	void setEnabled(bool) override {}
+
+private:
+	QString _text;
+};
+
 using FilterUniquePtr = std::unique_ptr<IFilter>;

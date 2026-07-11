@@ -51,6 +51,13 @@ std::expected<FilterUniquePtr, QString> ProfileParser::parseLine(const QString& 
 	bool isCommented = trimmedLine.startsWith("#");
 	QString cleanLine = isCommented ? trimmedLine.mid(1).trimmed() : trimmedLine;
 
+	// A commented line that doesn't parse as a known command is a plain comment; an active one is an error
+	const auto errorOrComment = [&](QString&& message) -> std::expected<FilterUniquePtr, QString> {
+		if (isCommented)
+			return std::make_unique<CommentLine>(cleanLine);
+		return std::unexpected(std::move(message));
+	};
+
 	// Parse Preamp
 	if (cleanLine.startsWith("Preamp:", Qt::CaseInsensitive))
 	{
@@ -58,7 +65,7 @@ std::expected<FilterUniquePtr, QString> ProfileParser::parseLine(const QString& 
 		QRegularExpression re(R"(Preamp:\s*([-+]?\d+\.?\d*)\s*dB)", QRegularExpression::CaseInsensitiveOption);
 		auto match = re.match(cleanLine);
 		if (!match.hasMatch())
-			return std::unexpected("Failed to parse Preamp line: " + line);
+			return errorOrComment("Failed to parse Preamp line: " + line);
 
 		double gain = match.captured(1).toDouble();
 		return std::make_unique<PreampFilter>(gain, !isCommented);
@@ -72,7 +79,7 @@ std::expected<FilterUniquePtr, QString> ProfileParser::parseLine(const QString& 
 		bool disabled = cleanLine.contains(" OFF ", Qt::CaseInsensitive);
 
 		if (!enabled && !disabled)
-			return std::unexpected("Filter line missing ON/OFF: " + line);
+			return errorOrComment("Filter line missing ON/OFF: " + line);
 
 		// A commented-out line is disabled regardless of its ON/OFF token (saveProfile disables by commenting out)
 		if (isCommented)
@@ -88,7 +95,7 @@ std::expected<FilterUniquePtr, QString> ProfileParser::parseLine(const QString& 
 			);
 			auto match = re.match(cleanLine);
 			if (!match.hasMatch())
-				return std::unexpected("Failed to parse PK filter line: " + line);
+				return errorOrComment("Failed to parse PK filter line: " + line);
 
 			double fc = match.captured(2).toDouble();
 			double gain = match.captured(3).toDouble();
@@ -103,8 +110,12 @@ std::expected<FilterUniquePtr, QString> ProfileParser::parseLine(const QString& 
 		}
 	}
 
-	// Unknown line format
-	return std::unexpected("Unknown line format: " + line);
+	if (isCommented)
+		return std::make_unique<CommentLine>(cleanLine);
+
+	// Unrecognized active command (GraphicEQ:, Convolution:, Device:, ...) - it would affect processing
+	// without being represented here, so treat as enabled unsupported and let parseProfile refuse the profile
+	return std::make_unique<UnsupportedFilter>(cleanLine, true);
 }
 
 std::expected<void, QString> ProfileParser::saveProfile(const QString& filePath, const std::vector<FilterUniquePtr>& filters)
