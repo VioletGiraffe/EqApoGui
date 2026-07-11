@@ -40,7 +40,6 @@ jobs:
         build_installer.bat
 
     - name: LOC count - app
-      if: "startsWith(matrix.os, 'windows')"
       shell: pwsh
       run: |
         winget install --id AlDanial.Cloc --exact --silent --accept-package-agreements --accept-source-agreements
