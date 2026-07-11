@@ -27,10 +27,9 @@ jobs:
         host: windows
         target: desktop
         arch: win64_msvc2022_64
+        archives: 'qtbase icu qtsvg'
+        modules: 'qtimageformats'
         cache: 'true'
-
-    - name: Setup MSBuild
-      uses: microsoft/setup-msbuild@v2
 
     - name: Setup MSVC Developer Command Prompt
       uses: ilammy/msvc-dev-cmd@v1
@@ -39,6 +38,25 @@ jobs:
       shell: cmd
       run: |
         build_installer.bat
+
+    - name: LOC count - app
+      if: "startsWith(matrix.os, 'windows')"
+      shell: pwsh
+      run: |
+        winget install --id AlDanial.Cloc --exact --silent --accept-package-agreements --accept-source-agreements
+        "$env:LOCALAPPDATA\Microsoft\WinGet\Links" >> $env:GITHUB_PATH
+
+        $result = cloc --include-lang="C,C++,C/C++ Header" --strip-str-comments `--exclude-dir=tests,bin,build,.git,3rdparty ` --by-file --json --quiet ./src/ | ConvertFrom-Json
+
+        $loc = $result.SUM.code
+        "App C/C++ code: $loc LOC"
+        "LOC_APP=$loc" >> $env:GITHUB_ENV
+
+        # Per-file counts (everything except the 'header' and 'SUM' meta entries)
+        $result.PSObject.Properties |
+          Where-Object { $_.Name -notin 'header','SUM' } |
+          Sort-Object { $_.Value.code } -Descending |
+          ForEach-Object { "{0,6}  {1}" -f $_.Value.code, $_.Name }
 
     - name: Upload installer artifact
       uses: actions/upload-artifact@v4
