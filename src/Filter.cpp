@@ -25,10 +25,7 @@ QString PeakingFilter::toConfigLine() const
 QString PeakingFilter::displayName() const
 {
 	return QString("PK: %1 Hz, %2%3 dB, Q=%4")
-		.arg(_fc, 0, 'f', 1)
-		.arg(_gain > 0 ? "+" : "")
-		.arg(_gain, 0, 'f', 1)
-		.arg(_q, 0, 'f', 2);
+		.arg(formatValue(_fc), _gain > 0 ? "+" : "", formatValue(_gain), formatValue(_q));
 }
 
 QString CommentLine::toConfigLine() const
