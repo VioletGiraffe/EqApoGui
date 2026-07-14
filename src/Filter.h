@@ -71,7 +71,14 @@ public:
 	WidthKind widthKind() const { return _widthKind; }
 	double width() const { return _width; }
 
-	void setType(BiquadType type, bool shelfUsesCenterFreq) { _type = type; _shelfUsesCenterFreq = shelfUsesCenterFreq; }
+	void setType(BiquadType type, bool shelfUsesCenterFreq)
+	{
+		_type = type;
+		_shelfUsesCenterFreq = shelfUsesCenterFreq;
+		// A width kind the new type can't express in E-APO syntax (slope is shelf-only, bandwidth is non-shelf) resets to unspecified
+		if ((_widthKind == WidthKind::SlopeDb && !isShelf()) || (_widthKind == WidthKind::BandwidthOct && isShelf()))
+			setWidth(WidthKind::Default, 0.0);
+	}
 	void setFc(double fc) { _fc = fc; }
 	void setGain(double gain) { _gain = gain; }
 	void setWidth(WidthKind kind, double width) { _widthKind = kind; _width = width; }

@@ -77,17 +77,12 @@ std::expected<FilterUniquePtr, QString> ProfileParser::parseLine(const QString& 
 		return std::unexpected(std::move(message));
 	};
 
-	// Parse Preamp
-	if (cleanLine.startsWith("Preamp:", Qt::CaseInsensitive))
+	if (const auto preamp = parsePreampLine(cleanLine); preamp.isPreampLine)
 	{
-		// Extract gain value
-		QRegularExpression re(R"(Preamp:\s*([-+]?\d+\.?\d*)\s*dB)", QRegularExpression::CaseInsensitiveOption);
-		auto match = re.match(cleanLine);
-		if (!match.hasMatch())
+		if (!preamp.gain.has_value())
 			return errorOrComment("Failed to parse Preamp line: " + line);
 
-		double gain = match.captured(1).toDouble();
-		return std::make_unique<PreampFilter>(gain, !isCommented);
+		return std::make_unique<PreampFilter>(*preamp.gain, !isCommented);
 	}
 
 	// Filter lines: both "Filter:" and the numbered "Filter 1:" form.
@@ -95,7 +90,7 @@ std::expected<FilterUniquePtr, QString> ProfileParser::parseLine(const QString& 
 	// with one extension: OFF (which E-APO simply ignores) and a comment prefix both mean "disabled".
 	if (cleanLine.startsWith("Filter"))
 	{
-		static const QRegularExpression reHeader(R"(^Filter\s*[0-9]*:\s*(ON|OFF)\s+([A-Za-z]+))");
+		static const QRegularExpression reHeader(R"(^Filter\s*[0-9]*\s*:\s*(ON|OFF)\s+([A-Za-z]+))");
 		const auto header = reHeader.match(cleanLine);
 		if (!header.hasMatch())
 			return errorOrComment("Malformed filter line: " + line);
@@ -128,7 +123,7 @@ std::expected<FilterUniquePtr, QString> ProfileParser::parseLine(const QString& 
 		QString params = cleanLine.mid(header.capturedEnd(2));
 		params.replace(',', '.'); // E-APO accepts comma as decimal mark
 
-		static const QRegularExpression reFc(R"(\s+Fc\s*([-+0-9.eE\x{00A0}]+)\s*Hz)");
+		static const QRegularExpression reFc(R"(\s+Fc\s*([-+0-9.eE\x{00A0}]+)\s*H\s*z)"); // yes, E-APO really allows "H z"
 		static const QRegularExpression reGain(R"(\s+Gain\s*([-+0-9.eE]+)\s*dB)");
 		static const QRegularExpression reQ(R"(\s+Q\s*([-+0-9.eE]+))");
 		static const QRegularExpression reBw(R"(\s+BW\s+Oct\s*([-+0-9.eE]+))");
@@ -179,6 +174,23 @@ std::expected<FilterUniquePtr, QString> ProfileParser::parseLine(const QString& 
 	// Unrecognized active command (GraphicEQ:, Convolution:, Device:, ...) - it would affect processing
 	// without being represented here, so treat as enabled unsupported and let parseProfile refuse the profile
 	return std::make_unique<UnsupportedFilter>(cleanLine, true);
+}
+
+ProfileParser::PreampLine ProfileParser::parsePreampLine(const QString& cleanLine)
+{
+	// E-APO matches the trimmed key "Preamp" exactly (case-sensitively, spaces before ':' allowed) and scans
+	// the value as "<number> dB" where the "dB" suffix is not actually verified, so it is optional here too
+	static const QRegularExpression rePreamp(R"(^Preamp\s*:\s*([-+0-9.eE,]+))");
+	const auto match = rePreamp.match(cleanLine);
+	if (!match.hasMatch())
+		return {};
+
+	QString gainString = match.captured(1);
+	gainString.replace(',', '.'); // E-APO accepts comma as decimal mark
+
+	bool ok = false;
+	const double gain = gainString.toDouble(&ok);
+	return { .isPreampLine = true, .gain = ok ? std::optional(gain) : std::nullopt };
 }
 
 std::expected<void, QString> ProfileParser::saveProfile(const QString& filePath, const std::vector<FilterUniquePtr>& filters)

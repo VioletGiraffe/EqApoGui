@@ -1,6 +1,8 @@
 #include "EqApoConfig.h"
+#include "ProfileParser.h"
 
 #include <QFile>
+#include <QRegularExpression>
 #include <QTextStream>
 #include <QThread>
 
@@ -29,6 +31,9 @@ std::expected<void, QString> EqApoConfig::reloadConfig() noexcept
 	QTextStream in(&configFile);
 	in.setEncoding(QStringConverter::Utf8);
 
+	// The key is matched like E-APO does: trimmed, case-sensitive, spaces allowed before ':'
+	static const QRegularExpression reInclude(R"(^Include\s*:\s*(.+))");
+
 	QString line;
 	while (in.readLineInto(&line))
 	{
@@ -38,21 +43,18 @@ std::expected<void, QString> EqApoConfig::reloadConfig() noexcept
 
 		const bool isCommented = line.startsWith("#");
 		const QString cleanLine = isCommented ? line.mid(1).trimmed() : line;
-		if (cleanLine.startsWith("Preamp:", Qt::CaseInsensitive))
+
+		if (const auto preamp = ProfileParser::parsePreampLine(cleanLine); preamp.isPreampLine)
 		{
-			_preampState.enabled = !isCommented;
-			const QString gainStr = QString{cleanLine}.remove("Preamp:", Qt::CaseInsensitive).remove("dB", Qt::CaseInsensitive).trimmed();
-			bool ok = false;
-			const double gain = gainStr.toDouble(&ok);
-			if (ok)
-				_preampState.gain = gain;
-			else
+			if (!preamp.gain.has_value())
 				return std::unexpected("Failed to parse preamp gain from the line\n" + cleanLine);
+
+			_preampState.gain = *preamp.gain;
+			_preampState.enabled = !isCommented;
 		}
-		else if (cleanLine.startsWith("Include:", Qt::CaseInsensitive))
+		else if (const auto includeMatch = reInclude.match(cleanLine); includeMatch.hasMatch())
 		{
-			const QString configFileName = cleanLine.mid(cleanLine.indexOf(':') + 1).trimmed();
-			_profiles.emplace_back(configFileName, !isCommented);
+			_profiles.emplace_back(includeMatch.captured(1).trimmed(), !isCommented);
 		}
 		else
 			return std::unexpected("Unknown line in the config: " + line);
