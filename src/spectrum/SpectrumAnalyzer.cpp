@@ -28,7 +28,7 @@ void SpectrumAnalyzer::InitializeFFT() {
 	m_window.resize(m_fftSize);
 	m_fftInput.resize(m_fftSize);
 	m_fftOutput.resize(m_fftSize);
-	m_powerMagnitude.resize(m_fftSize / 2 + 1, -100.0f);
+	m_magnitudeSpectrum.resize(m_fftSize / 2 + 1, 0.0f);
 
 	GenerateWindow();
 }
@@ -40,12 +40,8 @@ void SpectrumAnalyzer::CleanupFFT() {
 	}
 }
 
-
-
-// Get the spectrum magnitude
-// Returns array of size (fftSize/2 + 1)
-const std::vector<float>& SpectrumAnalyzer::GetPowerSpectrum() const {
-	return m_powerMagnitude;
+const std::vector<float>& SpectrumAnalyzer::GetMagnitudeSpectrum() const {
+	return m_magnitudeSpectrum;
 }
 
 // Get frequency for a given bin
@@ -150,8 +146,7 @@ void SpectrumAnalyzer::ProcessSamples(const float* samples, int numSamples, int 
 	// Perform FFT
 	kiss_fft(m_fftConfig, m_fftInput.data(), m_fftOutput.data());
 
-	// Calculate magnitude spectrum in dB
-	// Only need first half of spectrum (Nyquist)
+	// Linear magnitude; only the first half of the spectrum (up to Nyquist) is meaningful
 	const int numBins = m_fftSize / 2 + 1;
 	const float normalFactor = 1.0f / (float)m_fftSize;
 
@@ -159,13 +154,9 @@ void SpectrumAnalyzer::ProcessSamples(const float* samples, int numSamples, int 
 		float real = m_fftOutput[i].r;
 		float imag = m_fftOutput[i].i;
 
-		// Calculate magnitude
 		const float magnitude = sqrtf(real * real + imag * imag) * normalFactor;
 
-		// Convert to dB (20 * log10(magnitude))
-		// Add small epsilon to avoid log(0)
-		//float db = 20.0f * log10f(magnitude + 1e-10f);
-
-		m_powerMagnitude[i] = magnitude;
+		// Open experiment option - dB scale instead: 20.0f * log10f(magnitude + 1e-10f)
+		m_magnitudeSpectrum[i] = magnitude;
 	}
 }
