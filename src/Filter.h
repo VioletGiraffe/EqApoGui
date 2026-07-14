@@ -32,37 +32,71 @@ private:
 	bool _enabled = true;
 };
 
-// Peaking filter (PK)
-class PeakingFilter final : public IFilter {
+// The biquad filter types of Equalizer APO (see its BiQuadFilterFactory.cpp)
+enum class BiquadType {
+	Peaking,   // PK, PEQ, Modal
+	LowPass,   // LP, LPQ
+	HighPass,  // HP, HPQ
+	BandPass,  // BP
+	Notch,     // NO
+	AllPass,   // AP
+	LowShelf,  // LS (corner freq semantics), LSC (center freq)
+	HighShelf  // HS (corner freq semantics), HSC (center freq)
+};
+
+// How the filter width was specified. Default = not given in the config line;
+// E-APO then uses Q=0.7071 (LP/HP/BP), Q=30 (NO) or shelf slope S=0.9 (LS/HS/LSC/HSC).
+enum class WidthKind {
+	Default,
+	Q,
+	BandwidthOct, // "BW Oct <n>" - peaking and notch, ignored by E-APO for shelves
+	SlopeDb       // "<n> dB" right after the type token - shelves only
+};
+
+// Any of E-APO's RBJ cookbook biquad filters
+class BiquadFilter final : public IFilter {
 public:
-	PeakingFilter(double fc, double gain, double q, bool enabled = true)
-		: _fc(fc), _gain(gain), _q(q), _enabled(enabled) {}
+	BiquadFilter(BiquadType type, bool shelfUsesCenterFreq, double fc, double gain, WidthKind widthKind, double width, bool enabled = true)
+		: _fc(fc), _gain(gain), _width(width), _type(type), _widthKind(widthKind), _shelfUsesCenterFreq(shelfUsesCenterFreq), _enabled(enabled) {}
 
 	QString toConfigLine() const override;
 	QString displayName() const override;
 	bool isEnabled() const override { return _enabled; }
 	void setEnabled(bool enabled) override { _enabled = enabled; }
 
+	BiquadType type() const { return _type; }
+	bool shelfUsesCenterFreq() const { return _shelfUsesCenterFreq; }
 	double fc() const { return _fc; }
 	double gain() const { return _gain; }
-	double q() const { return _q; }
+	WidthKind widthKind() const { return _widthKind; }
+	double width() const { return _width; }
 
+	void setType(BiquadType type, bool shelfUsesCenterFreq) { _type = type; _shelfUsesCenterFreq = shelfUsesCenterFreq; }
 	void setFc(double fc) { _fc = fc; }
 	void setGain(double gain) { _gain = gain; }
-	void setQ(double q) { _q = q; }
+	void setWidth(WidthKind kind, double width) { _widthKind = kind; _width = width; }
+
+	bool isShelf() const { return _type == BiquadType::LowShelf || _type == BiquadType::HighShelf; }
+	bool hasGain() const { return _type == BiquadType::Peaking || isShelf(); } // E-APO ignores gain for the other types
+	bool requiresWidth() const { return _type == BiquadType::Peaking || _type == BiquadType::AllPass; } // no E-APO default width for these
+	QString typeToken() const;
 
 private:
-	double _fc = 1000.0;  // Center frequency in Hz
-	double _gain = 0.0;   // Gain in dB
-	double _q = 1.0;      // Q factor
+	double _fc = 1000.0;
+	double _gain = 0.0;
+	double _width = 0.0;
+	BiquadType _type = BiquadType::Peaking;
+	WidthKind _widthKind = WidthKind::Default;
+	bool _shelfUsesCenterFreq = false;
 	bool _enabled = true;
 };
 
-// Unsupported filter (preserved as-is)
+// Unsupported line (preserved as-is)
 class UnsupportedFilter final : public IFilter {
 public:
-	UnsupportedFilter(const QString& originalLine, bool enabled)
-		: _originalLine(originalLine), _enabled(enabled) {}
+	// noOp: valid line with no effect in E-APO (e.g. "Filter: ON None" placeholders), doesn't block editing the profile
+	UnsupportedFilter(const QString& originalLine, bool enabled, bool noOp = false)
+		: _originalLine(originalLine), _enabled(enabled), _noOp(noOp) {}
 
 	QString toConfigLine() const override;
 	QString displayName() const override;
@@ -70,10 +104,12 @@ public:
 	void setEnabled(bool enabled) override { _enabled = enabled; }
 
 	QString originalLine() const { return _originalLine; }
+	bool isNoOp() const { return _noOp; }
 
 private:
 	QString _originalLine;
 	bool _enabled;
+	bool _noOp;
 };
 
 // Comment line (preserved verbatim, never enabled; saveProfile re-adds the '#' prefix)

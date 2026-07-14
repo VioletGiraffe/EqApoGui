@@ -2,6 +2,7 @@
 #include "ProfileParser.h"
 
 #include <QCheckBox>
+#include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QFileInfo>
 #include <QGroupBox>
@@ -57,9 +58,9 @@ ProfileEditorWindow::ProfileEditorWindow(const QString& profilePath, QWidget* pa
 	filtersLayout->addWidget(_filterScrollArea);
 
 	// Add filter button
-	QPushButton* addPkButton = new QPushButton("Add Peaking Filter", this);
-	connect(addPkButton, &QPushButton::clicked, this, &ProfileEditorWindow::addPeakingFilter);
-	filtersLayout->addWidget(addPkButton);
+	QPushButton* addFilterButton = new QPushButton("Add Filter", this);
+	connect(addFilterButton, &QPushButton::clicked, this, &ProfileEditorWindow::addFilter);
+	filtersLayout->addWidget(addFilterButton);
 
 	mainSplitter->addWidget(filtersContainer);
 	mainSplitter->setStretchFactor(0, 1);
@@ -166,45 +167,100 @@ void ProfileEditorWindow::createFilterWidget(QVBoxLayout* layout, IFilter* filte
 		});
 		boxLayout->addWidget(gainSpin);
 	}
-	else if (auto* pk = dynamic_cast<PeakingFilter*>(filter))
+	else if (auto* biquad = dynamic_cast<BiquadFilter*>(filter))
 	{
-		// Peaking filter controls
-		boxLayout->addWidget(new QLabel("Peak", filterBox));
+		struct TypeEntry { const char* label; BiquadType type; bool centerFreq; };
+		static constexpr TypeEntry typeEntries[] = {
+			{ "PK (peaking)", BiquadType::Peaking, false },
+			{ "LP (low-pass)", BiquadType::LowPass, false },
+			{ "HP (high-pass)", BiquadType::HighPass, false },
+			{ "BP (band-pass)", BiquadType::BandPass, false },
+			{ "NO (notch)", BiquadType::Notch, false },
+			{ "AP (all-pass)", BiquadType::AllPass, false },
+			{ "LS (low shelf, corner Fc)", BiquadType::LowShelf, false },
+			{ "HS (high shelf, corner Fc)", BiquadType::HighShelf, false },
+			{ "LSC (low shelf)", BiquadType::LowShelf, true },
+			{ "HSC (high shelf)", BiquadType::HighShelf, true },
+		};
 
-		boxLayout->addWidget(new QLabel("Frequency:", filterBox));
+		QComboBox* typeCombo = new QComboBox(filterBox);
+		for (const TypeEntry& entry : typeEntries)
+		{
+			typeCombo->addItem(entry.label);
+			if (entry.type == biquad->type() && entry.centerFreq == biquad->shelfUsesCenterFreq())
+				typeCombo->setCurrentIndex(typeCombo->count() - 1);
+		}
+		connect(typeCombo, &QComboBox::currentIndexChanged, this, [this, biquad](int comboIndex) {
+			const TypeEntry& entry = typeEntries[comboIndex];
+			biquad->setType(entry.type, entry.centerFreq);
+			if (biquad->requiresWidth() && biquad->widthKind() == WidthKind::Default)
+				biquad->setWidth(WidthKind::Q, 0.7071); // E-APO has no default width for PK/AP
+			rebuildFilterUI(); // the set of shown fields differs per type
+			onFilterChanged();
+		});
+		boxLayout->addWidget(typeCombo);
+
+		boxLayout->addWidget(new QLabel("Fc:", filterBox));
 		QDoubleSpinBox* fcSpin = new QDoubleSpinBox(filterBox);
 		fcSpin->setRange(15.0, 20000.0);
 		fcSpin->setSingleStep(10.0);
 		fcSpin->setSuffix(" Hz");
-		fcSpin->setValue(pk->fc());
-		connect(fcSpin, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this, pk](double value) {
-			pk->setFc(value);
+		fcSpin->setValue(biquad->fc());
+		connect(fcSpin, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this, biquad](double value) {
+			biquad->setFc(value);
 			onFilterChanged();
 		});
 		boxLayout->addWidget(fcSpin);
 
-		boxLayout->addWidget(new QLabel("Gain:", filterBox));
-		QDoubleSpinBox* gainSpin = new QDoubleSpinBox(filterBox);
-		gainSpin->setRange(-20.0, 20.0);
-		gainSpin->setSingleStep(0.1);
-		gainSpin->setSuffix(" dB");
-		gainSpin->setValue(pk->gain());
-		connect(gainSpin, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this, pk](double value) {
-			pk->setGain(value);
-			onFilterChanged();
-		});
-		boxLayout->addWidget(gainSpin);
+		if (biquad->hasGain())
+		{
+			boxLayout->addWidget(new QLabel("Gain:", filterBox));
+			QDoubleSpinBox* gainSpin = new QDoubleSpinBox(filterBox);
+			gainSpin->setRange(-30.0, 30.0);
+			gainSpin->setSingleStep(0.1);
+			gainSpin->setSuffix(" dB");
+			gainSpin->setValue(biquad->gain());
+			connect(gainSpin, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this, biquad](double value) {
+				biquad->setGain(value);
+				onFilterChanged();
+			});
+			boxLayout->addWidget(gainSpin);
+		}
 
-		boxLayout->addWidget(new QLabel("Q:", filterBox));
-		QDoubleSpinBox* qSpin = new QDoubleSpinBox(filterBox);
-		qSpin->setRange(0.1, 10.0);
-		qSpin->setSingleStep(0.1);
-		qSpin->setValue(pk->q());
-		connect(qSpin, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this, pk](double value) {
-			pk->setQ(value);
+		// Width: Q / bandwidth / shelf slope, labeled by how the profile specified it
+		const WidthKind widthKind = biquad->widthKind();
+		const char* widthLabel = widthKind == WidthKind::BandwidthOct ? "BW Oct:" : (widthKind == WidthKind::SlopeDb ? "Slope:" : "Q:");
+		boxLayout->addWidget(new QLabel(widthLabel, filterBox));
+		QDoubleSpinBox* widthSpin = new QDoubleSpinBox(filterBox);
+		widthSpin->setDecimals(4);
+		widthSpin->setSingleStep(0.1);
+		if (biquad->requiresWidth())
+			widthSpin->setRange(0.05, 100.0);
+		else
+		{
+			widthSpin->setRange(0.0, 100.0);
+			widthSpin->setSpecialValueText("default"); // 0 = E-APO's per-type default width
+		}
+		if (widthKind == WidthKind::SlopeDb)
+		{
+			widthSpin->setSuffix(" dB");
+			widthSpin->setMaximum(12.0); // S = slope/12 must not exceed 1: steeper slopes make the RBJ alpha formula NaN (in E-APO too)
+		}
+		widthSpin->setValue(widthKind == WidthKind::Default ? 0.0 : biquad->width());
+		connect(widthSpin, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this, biquad, widthSpin](double value) {
+			// Below the 4-decimal display resolution = zero. Qt's stepping accumulates float error and can land on
+			// e.g. +5.6e-18 instead of 0, which displays as "0.0000" instead of "default" and would poison the math.
+			if (value < 0.00005)
+			{
+				biquad->setWidth(WidthKind::Default, 0.0);
+				if (value > 0.0)
+					widthSpin->setValue(0.0); // snap to the real minimum; re-fires valueChanged, which then takes the value == 0 path
+			}
+			else // a fresh width on a "default" filter is a Q; otherwise keep the kind the profile used
+				biquad->setWidth(biquad->widthKind() == WidthKind::Default ? WidthKind::Q : biquad->widthKind(), value);
 			onFilterChanged();
 		});
-		boxLayout->addWidget(qSpin);
+		boxLayout->addWidget(widthSpin);
 
 		// Delete button
 		QPushButton* deleteBtn = new QPushButton("Delete", filterBox);
@@ -219,10 +275,10 @@ void ProfileEditorWindow::createFilterWidget(QVBoxLayout* layout, IFilter* filte
 		boxLayout->addStretch(1);
 		boxLayout->addWidget(deleteBtn);
 	}
-	else if (auto* unsupported = dynamic_cast<UnsupportedFilter*>(filter))
+	else if (dynamic_cast<UnsupportedFilter*>(filter))
 	{
-		// Unsupported filter - just show info
-		QLabel* label = new QLabel("[Unsupported] " + unsupported->originalLine(), filterBox);
+		// Unsupported or no-op filter - just show info
+		QLabel* label = new QLabel(filter->displayName(), filterBox);
 		label->setStyleSheet("color: gray;");
 		boxLayout->addWidget(label);
 	}
@@ -231,10 +287,10 @@ void ProfileEditorWindow::createFilterWidget(QVBoxLayout* layout, IFilter* filte
 	layout->addWidget(filterBox);
 }
 
-void ProfileEditorWindow::addPeakingFilter()
+void ProfileEditorWindow::addFilter()
 {
-	// Add a default peaking filter
-	_filters.push_back(std::make_unique<PeakingFilter>(1000.0, 0.0, 1.0, true));
+	// A default peaking filter; the type can be changed in the filter's row
+	_filters.push_back(std::make_unique<BiquadFilter>(BiquadType::Peaking, false, 1000.0, 0.0, WidthKind::Q, 1.0, true));
 	rebuildFilterUI();
 	onFilterChanged();
 }

@@ -4,6 +4,25 @@
 #include <QTextStream>
 #include <QRegularExpression>
 
+#include <algorithm>
+#include <iterator>
+
+// Port of E-APO's BiQuadFilterFactory::getFreq(). Returns -1 on parse failure, same as E-APO.
+static double parseFreq(QString s)
+{
+	s.remove(QChar(0x00A0)); // remove thousands separator for locales utilizing non-breaking space
+	bool ok = false;
+	double result = s.toDouble(&ok);
+	if (!ok)
+		return -1.0;
+
+	// "1.234" (dot exactly 3 from the end, no exponent) is interpreted as a thousands separator because of Room EQ Wizard
+	if (s.length() >= 5 && !s.contains('e') && !s.contains('E') && s[s.length() - 4] == '.')
+		result *= 1000.0;
+
+	return result;
+}
+
 std::expected<ProfileData, QString> ProfileParser::parseProfile(const QString& filePath)
 {
 	QFile file(filePath);
@@ -29,10 +48,10 @@ std::expected<ProfileData, QString> ProfileParser::parseProfile(const QString& f
 
 		auto& filter = filterResult.value();
 		
-		// Check if it's an enabled unsupported filter
+		// Enabled unsupported filters block editing (no-op lines like "Filter: ON None" don't)
 		if (auto* unsupported = dynamic_cast<UnsupportedFilter*>(filter.get()))
 		{
-			if (unsupported->isEnabled())
+			if (unsupported->isEnabled() && !unsupported->isNoOp())
 				hasEnabledUnsupportedFilter = true;
 		}
 
@@ -71,43 +90,87 @@ std::expected<FilterUniquePtr, QString> ProfileParser::parseLine(const QString& 
 		return std::make_unique<PreampFilter>(gain, !isCommented);
 	}
 
-	// Parse Filter lines: both "Filter:" and the numbered "Filter 1:" form
-	if (cleanLine.startsWith("Filter", Qt::CaseInsensitive))
+	// Filter lines: both "Filter:" and the numbered "Filter 1:" form.
+	// Matching mirrors E-APO's BiQuadFilterFactory.cpp (case-sensitive keywords and type tokens),
+	// with one extension: OFF (which E-APO simply ignores) and a comment prefix both mean "disabled".
+	if (cleanLine.startsWith("Filter"))
 	{
-		// Check if it's ON or OFF
-		bool enabled = cleanLine.contains(" ON ", Qt::CaseInsensitive);
-		bool disabled = cleanLine.contains(" OFF ", Qt::CaseInsensitive);
+		static const QRegularExpression reHeader(R"(^Filter\s*[0-9]*:\s*(ON|OFF)\s+([A-Za-z]+))");
+		const auto header = reHeader.match(cleanLine);
+		if (!header.hasMatch())
+			return errorOrComment("Malformed filter line: " + line);
 
-		if (!enabled && !disabled)
-			return errorOrComment("Filter line missing ON/OFF: " + line);
+		const bool enabled = !isCommented && header.captured(1) == "ON";
+		const QString token = header.captured(2);
 
-		// A commented-out line is disabled regardless of its ON/OFF token (saveProfile disables by commenting out)
-		if (isCommented)
-			enabled = false;
+		if (token == "None") // placeholder lines written by some tools; E-APO creates no filter for them
+			return std::make_unique<UnsupportedFilter>(cleanLine, enabled, /*noOp=*/true);
 
-		// Check filter type
-		if (cleanLine.contains(" PK ", Qt::CaseInsensitive))
+		struct TokenMapping { const char* token; BiquadType type; bool centerFreq; };
+		static constexpr TokenMapping tokenMap[] = {
+			{ "PK", BiquadType::Peaking, false }, { "PEQ", BiquadType::Peaking, false }, { "Modal", BiquadType::Peaking, false },
+			{ "LP", BiquadType::LowPass, false }, { "LPQ", BiquadType::LowPass, false },
+			{ "HP", BiquadType::HighPass, false }, { "HPQ", BiquadType::HighPass, false },
+			{ "BP", BiquadType::BandPass, false },
+			{ "NO", BiquadType::Notch, false },
+			{ "AP", BiquadType::AllPass, false },
+			{ "LS", BiquadType::LowShelf, false }, { "LSC", BiquadType::LowShelf, true },
+			{ "HS", BiquadType::HighShelf, false }, { "HSC", BiquadType::HighShelf, true },
+		};
+		const auto* mapping = std::find_if(std::begin(tokenMap), std::end(tokenMap),
+			[&token](const TokenMapping& m) { return token == m.token; });
+		if (mapping == std::end(tokenMap))
+			return std::make_unique<UnsupportedFilter>(cleanLine, enabled); // unknown filter type - preserved; blocks editing while enabled
+
+		const BiquadType type = mapping->type;
+		const bool isShelf = type == BiquadType::LowShelf || type == BiquadType::HighShelf;
+
+		QString params = cleanLine.mid(header.capturedEnd(2));
+		params.replace(',', '.'); // E-APO accepts comma as decimal mark
+
+		static const QRegularExpression reFc(R"(\s+Fc\s*([-+0-9.eE\x{00A0}]+)\s*Hz)");
+		static const QRegularExpression reGain(R"(\s+Gain\s*([-+0-9.eE]+)\s*dB)");
+		static const QRegularExpression reQ(R"(\s+Q\s*([-+0-9.eE]+))");
+		static const QRegularExpression reBw(R"(\s+BW\s+Oct\s*([-+0-9.eE]+))");
+		static const QRegularExpression reSlope(R"(^\s*([-+0-9.eE]+)\s*dB)"); // shelf slope immediately follows the type token
+
+		const auto fcMatch = reFc.match(params);
+		if (!fcMatch.hasMatch())
+			return errorOrComment("No Fc in filter line: " + line);
+		const double fc = parseFreq(fcMatch.captured(1));
+
+		double gain = 0.0;
+		const bool needsGain = type == BiquadType::Peaking || isShelf;
+		if (const auto gainMatch = reGain.match(params); gainMatch.hasMatch())
+			gain = gainMatch.captured(1).toDouble(); // stored but unused for types where E-APO ignores gain
+		else if (needsGain)
+			return errorOrComment("No gain in filter line: " + line);
+
+		// Width: Q, or bandwidth in octaves (except shelves), or slope in dB (shelves only) - later ones take precedence, as in E-APO
+		WidthKind widthKind = WidthKind::Default;
+		double width = 0.0;
+		if (const auto qMatch = reQ.match(params); qMatch.hasMatch())
 		{
-			// Parse peaking filter: Filter: ON PK Fc 160.7 Hz Gain -2 dB Q 3.92
-			QRegularExpression re(
-				R"(Filter\s*[0-9]*:\s*(ON|OFF)\s+PK\s+Fc\s+([-+]?\d+\.?\d*)\s*Hz\s+Gain\s+([-+]?\d+\.?\d*)\s*dB\s+Q\s+([-+]?\d+\.?\d*))",
-				QRegularExpression::CaseInsensitiveOption
-			);
-			auto match = re.match(cleanLine);
-			if (!match.hasMatch())
-				return errorOrComment("Failed to parse PK filter line: " + line);
-
-			double fc = match.captured(2).toDouble();
-			double gain = match.captured(3).toDouble();
-			double q = match.captured(4).toDouble();
-
-			return std::make_unique<PeakingFilter>(fc, gain, q, enabled);
+			widthKind = WidthKind::Q;
+			width = qMatch.captured(1).toDouble();
 		}
-		else
+		if (const auto bwMatch = reBw.match(params); bwMatch.hasMatch() && !isShelf)
 		{
-			// Unsupported filter type - preserve as-is
-			return std::make_unique<UnsupportedFilter>(cleanLine, enabled);
+			widthKind = WidthKind::BandwidthOct;
+			width = bwMatch.captured(1).toDouble();
 		}
+		if (const auto slopeMatch = reSlope.match(params); slopeMatch.hasMatch() && isShelf)
+		{
+			widthKind = WidthKind::SlopeDb;
+			width = slopeMatch.captured(1).toDouble();
+		}
+		if (width == 0.0) // an explicit zero behaves as "not specified" in E-APO
+			widthKind = WidthKind::Default;
+
+		if (widthKind == WidthKind::Default && (type == BiquadType::Peaking || type == BiquadType::AllPass))
+			return errorOrComment("No Q or bandwidth in filter line: " + line);
+
+		return std::make_unique<BiquadFilter>(type, mapping->centerFreq, fc, gain, widthKind, width, enabled);
 	}
 
 	if (isCommented)

@@ -16,16 +16,51 @@ QString PreampFilter::displayName() const
 	return QString("Preamp: %1 dB").arg(_gain, 0, 'f', 1);
 }
 
-QString PeakingFilter::toConfigLine() const
+QString BiquadFilter::typeToken() const
 {
-	return QString("Filter: ON PK Fc %1 Hz Gain %2 dB Q %3")
-		.arg(formatValue(_fc), formatValue(_gain), formatValue(_q));
+	switch (_type)
+	{
+	case BiquadType::Peaking:   return "PK";
+	case BiquadType::LowPass:   return "LP";
+	case BiquadType::HighPass:  return "HP";
+	case BiquadType::BandPass:  return "BP";
+	case BiquadType::Notch:     return "NO";
+	case BiquadType::AllPass:   return "AP";
+	case BiquadType::LowShelf:  return _shelfUsesCenterFreq ? "LSC" : "LS";
+	case BiquadType::HighShelf: return _shelfUsesCenterFreq ? "HSC" : "HS";
+	}
+	return {};
 }
 
-QString PeakingFilter::displayName() const
+QString BiquadFilter::toConfigLine() const
 {
-	return QString("PK: %1 Hz, %2%3 dB, Q=%4")
-		.arg(formatValue(_fc), _gain > 0 ? "+" : "", formatValue(_gain), formatValue(_q));
+	QString line = "Filter: ON " + typeToken();
+	if (_widthKind == WidthKind::SlopeDb)
+		line += " " + formatValue(_width) + " dB";
+	line += " Fc " + formatValue(_fc) + " Hz";
+	if (hasGain())
+		line += " Gain " + formatValue(_gain) + " dB";
+	if (_widthKind == WidthKind::Q)
+		line += " Q " + formatValue(_width);
+	else if (_widthKind == WidthKind::BandwidthOct)
+		line += " BW Oct " + formatValue(_width);
+	return line;
+}
+
+QString BiquadFilter::displayName() const
+{
+	QString name = typeToken() + ": " + formatValue(_fc) + " Hz";
+	if (hasGain())
+		name += QString(", %1%2 dB").arg(_gain > 0 ? "+" : "", formatValue(_gain));
+
+	switch (_widthKind)
+	{
+	case WidthKind::Q:            name += ", Q=" + formatValue(_width); break;
+	case WidthKind::BandwidthOct: name += ", BW=" + formatValue(_width) + " oct"; break;
+	case WidthKind::SlopeDb:      name += ", slope " + formatValue(_width) + " dB"; break;
+	case WidthKind::Default:      break;
+	}
+	return name;
 }
 
 QString CommentLine::toConfigLine() const
@@ -45,5 +80,5 @@ QString UnsupportedFilter::toConfigLine() const
 
 QString UnsupportedFilter::displayName() const
 {
-	return "[Unsupported] " + _originalLine;
+	return (_noOp ? "[Ignored] " : "[Unsupported] ") + _originalLine;
 }

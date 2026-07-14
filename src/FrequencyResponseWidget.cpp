@@ -4,6 +4,7 @@
 #include <QPainter>
 #include <QPen>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 
@@ -69,10 +70,21 @@ void FrequencyResponseWidget::updateResponse()
 
 	_response = calculateFrequencyResponse(*_filters, _frequencies);
 
-	// Calculate dynamic min and max dB values
-	auto [minIt, maxIt] = std::minmax_element(_response.begin(), _response.end());
-	_minDb = std::floor(*minIt);
-	_maxDb = std::ceil(*maxIt);
+	// Calculate dynamic min and max dB values. Non-finite values are excluded: filters can legitimately
+	// produce -inf (a notch null) or NaN (degenerate parameters NaN the coefficients - in E-APO too),
+	// and a single one would otherwise turn the whole scale, and thus every drawn point, into NaN.
+	double lowest = 0.0, highest = 0.0;
+	bool anyFinite = false;
+	for (const double db : _response)
+	{
+		if (!std::isfinite(db))
+			continue;
+		lowest = anyFinite ? std::min(lowest, db) : db;
+		highest = anyFinite ? std::max(highest, db) : db;
+		anyFinite = true;
+	}
+	_minDb = anyFinite ? std::floor(lowest) : -12.0;
+	_maxDb = anyFinite ? std::ceil(highest) : 12.0;
 
 	update();
 }
@@ -189,6 +201,9 @@ void FrequencyResponseWidget::drawResponse(QPainter& p)
 	{
 		const double freq = _frequencies[i];
 		double db = _response[i];
+
+		if (!std::isfinite(db))
+			db = _minDb; // notch nulls (-inf) and NaN points draw at the bottom edge
 
 		// Clamp to visible range
 		db = std::max(_minDb, std::min(_maxDb, db));

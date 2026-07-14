@@ -18,7 +18,7 @@ public:
 	explicit ProfileEditorWindow(const QString& profilePath, QWidget* parent = nullptr);
 
 private slots:
-	void addPeakingFilter();
+	void addFilter();
 	void saveProfile();
 	void onFilterChanged();
 
