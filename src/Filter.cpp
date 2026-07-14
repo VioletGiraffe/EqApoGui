@@ -1,8 +1,14 @@
 #include "Filter.h"
 
+// Shortest representation that survives a save/reload cycle unchanged (no clamping to fixed decimals, no trailing zeros)
+static QString formatValue(double value)
+{
+	return QString::number(value, 'g', 10);
+}
+
 QString PreampFilter::toConfigLine() const
 {
-	return QString("Preamp: %1 dB").arg(_gain, 0, 'f', 1);
+	return QString("Preamp: %1 dB").arg(formatValue(_gain));
 }
 
 QString PreampFilter::displayName() const
@@ -13,9 +19,7 @@ QString PreampFilter::displayName() const
 QString PeakingFilter::toConfigLine() const
 {
 	return QString("Filter: ON PK Fc %1 Hz Gain %2 dB Q %3")
-		.arg(_fc, 0, 'f', 1)
-		.arg(_gain, 0, 'f', 1)
-		.arg(_q, 0, 'f', 2);
+		.arg(formatValue(_fc), formatValue(_gain), formatValue(_q));
 }
 
 QString PeakingFilter::displayName() const
