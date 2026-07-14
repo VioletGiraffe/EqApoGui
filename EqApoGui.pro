@@ -24,7 +24,6 @@ SOURCES += \
 HEADERS += \
 	src/EqApoConfig.h \
 	src/Filter.h \
-	src/FrequencyResponse.h \
 	src/FrequencyResponseWidget.h \
 	src/MainWindow.h \
 	src/ProfileEditorWindow.h \

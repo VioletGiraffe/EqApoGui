@@ -157,7 +157,7 @@ void ProfileEditorWindow::createFilterWidget(QVBoxLayout* layout, IFilter* filte
 		boxLayout->addWidget(new QLabel("Preamp Gain:", filterBox));
 
 		QDoubleSpinBox* gainSpin = new QDoubleSpinBox(filterBox);
-		gainSpin->setRange(-30.0, 30.0);
+		gainSpin->setRange(-60.0, 60.0);
 		gainSpin->setSingleStep(0.5);
 		gainSpin->setSuffix(" dB");
 		gainSpin->setValue(preamp->gain());
@@ -202,7 +202,7 @@ void ProfileEditorWindow::createFilterWidget(QVBoxLayout* layout, IFilter* filte
 
 		boxLayout->addWidget(new QLabel("Fc:", filterBox));
 		QDoubleSpinBox* fcSpin = new QDoubleSpinBox(filterBox);
-		fcSpin->setRange(15.0, 20000.0);
+		fcSpin->setRange(1.0, 48000.0); // beyond the drawn 15-20k range: subsonic HP rumble filters and >20 kHz LP on 96 kHz setups exist
 		fcSpin->setSingleStep(10.0);
 		fcSpin->setSuffix(" Hz");
 		fcSpin->setValue(biquad->fc());
@@ -216,7 +216,7 @@ void ProfileEditorWindow::createFilterWidget(QVBoxLayout* layout, IFilter* filte
 		{
 			boxLayout->addWidget(new QLabel("Gain:", filterBox));
 			QDoubleSpinBox* gainSpin = new QDoubleSpinBox(filterBox);
-			gainSpin->setRange(-30.0, 30.0);
+			gainSpin->setRange(-60.0, 60.0);
 			gainSpin->setSingleStep(0.1);
 			gainSpin->setSuffix(" dB");
 			gainSpin->setValue(biquad->gain());

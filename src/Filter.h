@@ -53,6 +53,15 @@ enum class WidthKind {
 	SlopeDb       // "<n> dB" right after the type token - shelves only
 };
 
+// Biquad filter coefficients (unnormalized - only the b/a ratio matters for the magnitude response)
+struct BiquadCoefficients {
+	double b0, b1, b2;  // Numerator coefficients
+	double a0, a1, a2;  // Denominator coefficients
+
+	// Magnitude response in dB at the given frequency
+	double gainDbAt(double frequency, double sampleRate = 48000.0) const;
+};
+
 // Any of E-APO's RBJ cookbook biquad filters
 class BiquadFilter final : public IFilter {
 public:
@@ -87,6 +96,10 @@ public:
 	bool hasGain() const { return _type == BiquadType::Peaking || isShelf(); } // E-APO ignores gain for the other types
 	bool requiresWidth() const { return _type == BiquadType::Peaking || _type == BiquadType::AllPass; } // no E-APO default width for these
 	QString typeToken() const;
+
+	// A direct port of E-APO's BiQuad::BiQuad() (RBJ Audio EQ Cookbook formulas)
+	// plus the corner frequency adjustment from BiQuadFilter::initialize()
+	BiquadCoefficients coefficients(double sampleRate = 48000.0) const;
 
 private:
 	double _fc = 1000.0;

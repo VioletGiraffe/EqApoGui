@@ -1,5 +1,4 @@
 #include "FrequencyResponseWidget.h"
-#include "FrequencyResponse.h"
 
 #include <QPainter>
 #include <QPen>
@@ -34,6 +33,37 @@ inline double dbToY(double db, double minDb, double maxDb)
 {
 	// Linear scale, inverted (0 dB at center, positive up, negative down)
 	return 1.0 - (db - minDb) / (maxDb - minDb);
+}
+
+// Combined response of all enabled filters, in dB at each of the given frequencies
+static std::vector<double> calculateFrequencyResponse(
+	const std::vector<FilterUniquePtr>& filters,
+	const std::vector<double>& frequencies,
+	double sampleRate = 48000.0)
+{
+	std::vector<double> response(frequencies.size(), 0.0);
+
+	for (const auto& filter : filters)
+	{
+		if (!filter->isEnabled())
+			continue;
+
+		if (auto* preamp = dynamic_cast<PreampFilter*>(filter.get()))
+		{
+			// Preamp just adds a constant gain
+			for (size_t i = 0; i < response.size(); ++i)
+				response[i] += preamp->gain();
+		}
+		else if (auto* biquad = dynamic_cast<BiquadFilter*>(filter.get()))
+		{
+			const BiquadCoefficients coef = biquad->coefficients(sampleRate);
+			for (size_t i = 0; i < frequencies.size(); ++i)
+				response[i] += coef.gainDbAt(frequencies[i], sampleRate);
+		}
+		// Unsupported filters and comments contribute nothing
+	}
+
+	return response;
 }
 
 FrequencyResponseWidget::FrequencyResponseWidget(QWidget* parent) :
